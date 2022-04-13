@@ -2,16 +2,23 @@
 name = "cocolight"
 readme = "README.rst"
 requires-python = ">=3.8"
-license = {file = "LICENSE.txt"}
-keywords = ["cocotb", "HDL", "Hardware", "verification", "VHDL", "Verilog", "simulation", "EDA", "FPGA"]
-authors = [
-  {email = "kammoh@gmail.com"},
-  {name = "Kamyar Mohajerani"}
+license = { file = "LICENSE.txt" }
+keywords = [
+  "cocotb",
+  "HDL",
+  "Hardware",
+  "verification",
+  "VHDL",
+  "Verilog",
+  "simulation",
+  "EDA",
+  "FPGA",
 ]
+authors = [{ email = "kammoh@gmail.com" }, { name = "Kamyar Mohajerani" }]
 # maintainers = []
 classifiers = [
   "Development Status :: 4 - Beta",
-  "Programming Language :: Python"
+  "Programming Language :: Python",
 ]
 dynamic = ["version", "description"]
 
@@ -24,37 +31,30 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-test = [
-  "pytest > 7",
-  "pytest-cov[all]"
-]
+test = ["pytest > 7", "pytest-cov[all]"]
 
 [project.urls]
-# homepage = "example.com"
+homepage = "https://github.com/kammoh/cocolight"
 # documentation = "readthedocs.org"
-# repository = "github.com"
-# changelog = "github.com/me/spam/blob/master/CHANGELOG.md"
-
-# [project.scripts]
-# [project.gui-scripts]
-# [project.entry-points."cocolight-setup"]
+repository = "https://github.com/kammoh/cocolight.git"
+# changelog = "https://github.com/kammoh/cocolight/main/CHANGELOG.md"
 
 [build-system]
-# requires = ["setuptools >= 45", "wheel", "setuptools_scm[toml] >= 6.2"]
-# build-backend = "setuptools.build_meta"
-requires = ["flit_core >=3.4,<4"]
-build-backend = "flit_core.buildapi"
+requires = ["setuptools >= 61", "wheel", "setuptools_scm[toml] >= 6.2"]
+build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
+write_to = "cocolight/_version.py"
+write_to_template = '__version__ = "{version}"'
 
 
 [tool.pylint.messages_control]
 max-line-length = 120
 disable = [
   "line-too-long",
-  "invalid-name",
+  # "invalid-name",
   "too-few-public-methods",
-  "unspecified-encoding",
+  # "unspecified-encoding",
   "missing-function-docstring",
   "too-many-instance-attributes",
   "too-many-statements",
@@ -63,26 +63,58 @@ disable = [
   "too-many-arguments",
   "too-many-nested-blocks",
   # to be removed:
-  "missing-module-docstring",
-  "unused-argument",
-  "fixme",
-  "f-string-without-interpolation",
-  "wrong-import-order",
-  "missing-class-docstring",
-  "no-self-argument",               # from pydantic validators (classmethod)
-  "no-self-use",                    # from pydantic validators (classmethod)
+  # "missing-module-docstring",
+  # "unused-argument",
+  # "fixme",
+  # "f-string-without-interpolation",
+  # "wrong-import-order",
+  # "missing-class-docstring",
 ]
+
 [tool.pylint.similarities]
 min-similarity-lines = 10
-
-# Ignore comments when computing similarities.
 ignore-comments = "yes"
-
-# Ignore docstrings when computing similarities.
-ignore-docstrings = "yes"
-
-# Ignore imports when computing similarities.
-ignore-imports = "no"
+ignore-docstrings = "no"
+ignore-imports = "yes"
 
 [tool.pylint.design]
 max-returns = 8
+
+[tool.flakeheaven]
+# optionally inherit from remote config (or local if you want)
+base = "https://raw.githubusercontent.com/flakeheaven/flakeheaven/main/pyproject.toml"
+# specify any flake8 options. For example, exclude "example.py":
+# exclude = ["example.py"]
+# make output nice
+# format = "grouped"
+# 80 chars aren't enough in 21 century
+max_line_length = 120
+# show line of source code in output
+# show_source = true
+
+# list of plugins and rules for them
+[tool.flakeheaven.plugins]
+# include everything in pyflakes except F401
+# pyflakes = ["+*", "-F401"]
+pyflakes = ["+*"]
+pycodestyle = [
+  "+*",
+  "-E501", # line too long
+  "-C812", # missing trailing comma
+
+]
+# enable only codes from S100 to S199
+# flake8-bandit = ["-*", "+S1??"]
+flake8-bandit = [
+  "+*",
+  "-S603",
+  "-S404", # subprocess
+  "-S101", # asserts
+  "-S311", # random crypto
+]
+# enable everything that starts from `flake8-`
+"flake8-*" = ["+*"]
+# explicitly disable plugin
+flake8-docstrings = ["-*"]
+flake8-quotes = ["-*"]
+flake8-commas = ["-*"]
