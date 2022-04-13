@@ -1,30 +1,42 @@
 import os
 import random
+
 from box import Box
-from cocolight import InPort, OutPort, LightTb, cocotest, DUT
-
-in_bus = InPort(data_signal="radicand")
-out_bus = OutPort(data_signal=["root", "root_remainder"])
+import cocotb
+from cocolight import ValidReadyTb, cocotest, DUT, DutClock, DutReset
 
 
-class SqrtTb(LightTb):
+
+NUM_TV = int(os.environ.get("NUM_TV", 2000))
+DEBUG = bool(os.environ.get("DEBUG", False))
+
+
+class SqrtTb(ValidReadyTb):
+    def __init__(self, dut: DUT, debug: bool = DEBUG):
+        super().__init__(dut, DutClock("clk"), DutReset("rst"), debug)
+        self.in_bus = self.driver("radicand", data_suffix=None)
+        self.out_bus = self.monitor("root", data_suffix=[None, "remainder"])
+
     async def verify(self, rad: int):
-        await self.send_input(in_bus, rad)
-        out = await self.receive_output(out_bus)
-        # print(out)
+        stimulus = cocotb.start_soon(self.in_bus.enqueue(rad))
+        out = await self.out_bus.dequeue()
+        await stimulus
+
         assert isinstance(out, Box)
-        root = int(out.root)
-        remainder = int(out.root_remainder)
+        root = int(out[None])
+        remainder = int(out.remainder)
 
         assert rad == root**2 + remainder, f"{rad} !=  {root} ** 2 + {remainder}"
         assert rad < (root + 1) ** 2, f"root was too small!"
 
+        self.log.debug("radicand=%d got root=%d remainder=%d", rad, root, remainder)
+
 
 @cocotest()
-async def test_sqrt_corners(dut: DUT):
-    tb = SqrtTb(dut, in_bus, out_bus)
+async def test_sqrt_corners(dut: DUT, debug=False):
+    tb = SqrtTb(dut, debug=debug)
     await tb.reset()
-    print("DUT: ", str(dut))
+    tb.log.info("DUT: %s", str(dut))
     # get bound parameters/generics from the simulator
     G_IN_WIDTH = tb.get_int_value("G_IN_WIDTH")
     tb.log.info(f"G_IN_WIDTH:{G_IN_WIDTH}")
@@ -37,16 +49,13 @@ async def test_sqrt_corners(dut: DUT):
         await tb.verify(rad)
 
 
-NUM_TV = int(os.environ.get("NUM_TV", 2000))
-
 @cocotest
-async def test_sqrt(dut: DUT, num_tests: int = NUM_TV):
-    tb = SqrtTb(dut, in_bus, out_bus)
+async def test_sqrt(dut: DUT, num_tests: int = NUM_TV, debug=DEBUG):
+    tb = SqrtTb(dut, debug=debug)
     await tb.reset()
     # get bound parameters/generics from the simulator
-    G_IN_WIDTH = tb.get_int_value("G_IN_WIDTH")
-    assert G_IN_WIDTH
-    print(f"G_IN_WIDTH:{G_IN_WIDTH} num_tests:{num_tests}")
+    G_IN_WIDTH = tb.get_value("G_IN_WIDTH", int)
+    tb.log.info("G_IN_WIDTH:%d num_tests:%d", G_IN_WIDTH, num_tests)
     # await tb.clock_edge
     testcases = [random.getrandbits(G_IN_WIDTH) for _ in range(num_tests)]
     testcases = list(set(testcases))

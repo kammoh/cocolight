@@ -5,32 +5,14 @@ import logging
 import random
 import uuid
 from collections.abc import Coroutine
-from typing import (
-    Any,
-    Awaitable,
-    Callable,
-    Dict,
-    Iterable,
-    List,
-    Optional,
-    Protocol,
-    Tuple,
-    Type,
-    TypeVar,
-    Union,
-)
+from typing import Any, Awaitable, Callable, Dict, Iterable, List, Optional, Protocol, Tuple, Type, TypeVar, Union
 
 import cocotb
 from attrs import define
 from box import Box
 from cocotb.binary import BinaryValue
 from cocotb.clock import Clock
-from cocotb.handle import (
-    HierarchyObject,
-    NonHierarchyObject,
-    ModifiableObject,
-    ConstantObject,
-)
+from cocotb.handle import (ConstantObject, HierarchyObject, ModifiableObject)
 from cocotb.triggers import RisingEdge, Timer
 from cocotb.types import LogicArray, concat
 
@@ -105,7 +87,7 @@ def bv_repr(bv: BinaryValue) -> str:
             return f"0x{bv.integer:x}"
     except ValueError:
         return bv.binstr
-    
+
 
 @define
 class DutReset:
@@ -148,20 +130,6 @@ class IoPort:  # data + valid + ready
             self.name = uuid.uuid1().bytes.decode("utf-8")
 
 
-@define
-class InPort(IoPort):
-    def __init__(self, *args, **kwargs):
-        kwargs["is_output"] = False
-        super().__init__(*args, **kwargs)
-
-
-@define
-class OutPort(IoPort):
-    def __init__(self, *args, **kwargs):
-        kwargs["is_output"] = True
-        super().__init__(*args, **kwargs)
-
-
 PutableData = Union[int, str, bool, BinaryValue]
 
 
@@ -184,19 +152,26 @@ class ValidReadyInterface:
         dut: DUT,
         clock: Union[str, ModifiableObject],
         prefix: str,
-        data_suffix: Union[str, List[str]] = "data",
-        sep: str="_",
+        data_suffix: Union[None, str, List[Union[str, None]]] = "data",
+        sep: str = "_",
         timeout: Optional[int] = None,
         back_pressure: Union[None, Tuple[int, int], int] = None,
     ) -> None:
         self.dut = dut
         if isinstance(clock, str):
             clock = getattr(dut, clock)
-        self.data_sig: Union[ModifiableObject, Dict[str, ModifiableObject]] = (
-            getattr(dut, prefix + sep + data_suffix)
-            if isinstance(data_suffix, str)
-            else {ds: getattr(dut, prefix + sep + ds) for ds in data_suffix}
-        )
+        self.data_sig: Union[ModifiableObject, Dict[Union[str, None], ModifiableObject]]
+        def _get_sig(ds):
+            name = prefix if ds is None else prefix + sep + ds
+            return getattr(dut, name)
+        if data_suffix is None or isinstance(data_suffix, str):
+            self.data_sig = _get_sig(data_suffix)
+        elif isinstance(data_suffix, (Iterable, list)):
+            self.data_sig = {ds:_get_sig(ds) for ds in data_suffix}
+        else:
+            raise TypeError(
+                f"unsupported type for data_suffix: {type(data_suffix)}")
+
         self.clock = clock
         self.clock_edge = RisingEdge(clock)
         self.valid_sig: ModifiableObject = getattr(dut, prefix + sep + "valid")
@@ -223,9 +198,9 @@ class ValidReadyDriver(ValidReadyInterface):
         dut: DUT,
         clock,
         prefix: str,
-        data_suffix: Union[str, List[str]] = "data",
-        sep="_",
-        timeout=2000,
+        data_suffix: Union[None, str, List[Union[str, None]]] = "data",
+        sep: str = "_",
+        timeout: Optional[int] = None,
         back_pressure: Union[None, Tuple[int, int], int] = None,
     ) -> None:
         super().__init__(dut, clock, prefix, data_suffix, sep, timeout, back_pressure)
@@ -261,7 +236,7 @@ class ValidReadyMonitor(ValidReadyInterface):
         dut: DUT,
         clock,
         prefix: str,
-        data_suffix: Union[str, List[str]] = "data",
+        data_suffix: Union[None, str, List[Union[str, None]]] = "data",
         sep="_",
         timeout: Optional[int] = None,
         back_pressure: Union[None, Tuple[int, int], int] = None,
@@ -288,21 +263,23 @@ class ValidReadyMonitor(ValidReadyInterface):
         self, n: int
     ) -> List[Union[BinaryValue, Dict[str, BinaryValue]]]:
         return [await self.dequeue() for _ in range(n)]
-    
+
     async def expect(self, expected):
         out = await self.dequeue()
         if isinstance(out, dict):
-            assert isinstance(expected, dict), "output has multiple data fields"
+            assert isinstance(
+                expected, dict), "output has multiple data fields"
             for name, v in expected.items():
                 if not isinstance(v, (BinaryValue)):
                     v = BinaryValue(v)
                 if out[name] != v:
-                    raise ValueError(f"Field {name} does not match! Received: {bv_repr(out[name])}, expected: {bv_repr(v)}")
-                
+                    raise ValueError(
+                        f"Field {name} does not match! Received: {bv_repr(out[name])}, expected: {bv_repr(v)}")
+
         else:
             assert isinstance(out, BinaryValue)
             if not isinstance(expected, (BinaryValue)):
-                    expected = BinaryValue(expected)
+                expected = BinaryValue(expected)
             if out != expected:
                 # fmt: off
                 raise ValueError(f"out={bv_repr(out)}, expected={bv_repr(expected)}")
@@ -391,11 +368,26 @@ class LightTb:
 
 
 class ValidReadyTb(LightTb):
-    def driver(self, prefix, timeout=1000,back_pressure=(0,3), **kwargs) -> ValidReadyDriver:
-        return ValidReadyDriver(self.dut, self.clock_sig, prefix, timeout=timeout, back_pressure=back_pressure, **kwargs)
+    def driver(self, 
+        prefix: str,
+        data_suffix: Union[None, str, List[Union[None,str]]] = "data",
+        sep:str="_",
+        timeout:Optional[int]=1000,
+        back_pressure=(0, 3),
+        **kwargs
+    ) -> ValidReadyDriver:
+        return ValidReadyDriver(self.dut, self.clock_sig, prefix, data_suffix=data_suffix, sep=sep, timeout=timeout, back_pressure=back_pressure, **kwargs)
 
-    def monitor(self, prefix, timeout=1000, back_pressure=(0,5), **kwargs) -> ValidReadyMonitor:
-        return ValidReadyMonitor(self.dut, self.clock_sig, prefix, timeout=timeout, back_pressure=back_pressure, **kwargs)
+    def monitor(
+        self,  
+        prefix: str,
+        data_suffix: Union[None, str, List[Union[str, None]]] = "data",
+        sep:str="_",
+        timeout:Optional[int]=1000,
+        back_pressure=(0, 5),
+        **kwargs
+    ) -> ValidReadyMonitor:
+        return ValidReadyMonitor(self.dut, self.clock_sig, prefix, data_suffix=data_suffix, sep=sep, timeout=timeout, back_pressure=back_pressure, **kwargs)
 
 
 class CModel:
