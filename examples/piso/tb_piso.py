@@ -5,7 +5,6 @@ from functools import reduce
 from itertools import zip_longest
 
 import cocotb
-from box import Box
 from cocolight import DUT, ValidReadyTb, cocotest, concat_bv
 from cocotb.binary import BinaryValue
 
@@ -116,7 +115,8 @@ async def test_piso(dut: DUT, num_tests: int = NUM_TV, debug=False):
                     IN_WIDTH // 8,
                     incomplete=Incomplete.Fill,
                     fillvalue=BinaryValue(
-                        0, n_bits=data_byte[0].n_bits if data_byte else None
+                        0,
+                        n_bits=data_byte[0].n_bits if data_byte else None,
                     ),
                 )
             ]
@@ -131,12 +131,12 @@ async def test_piso(dut: DUT, num_tests: int = NUM_TV, debug=False):
             }
             for per_channel in zip(*in_data_channels)
         ]
-        
+
         def last_valid_bytes(total_bytes, w) -> str:
             bs = w // 8
             r = total_bytes % bs
             x = bs if r == 0 else r
-            vb = ("0" * (bs - x )) + ("1" * x)
+            vb = ("0" * (bs - x)) + ("1" * x)
             if G_BIGENDIAN:
                 return vb[::-1]
             return vb

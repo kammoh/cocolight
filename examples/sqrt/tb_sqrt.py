@@ -25,7 +25,7 @@ class SqrtTb(ValidReadyTb):
         remainder = int(out.remainder)
 
         assert rad == root**2 + remainder, f"{rad} !=  {root} ** 2 + {remainder}"
-        assert rad < (root + 1) ** 2, f"root was too small!"
+        assert rad < (root + 1) ** 2, "returned root was smaller than expected"
 
         self.log.debug("radicand=%d got root=%d remainder=%d", rad, root, remainder)
 

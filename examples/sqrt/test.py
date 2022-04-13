@@ -20,7 +20,7 @@ subprocess.check_call(
         "-U",
         "-r",
         SCRIPT_DIR / "tb-requirements.txt",
-    ]
+    ],
 )
 
 design = Design.from_toml(SCRIPT_DIR / "sqrt.toml")
@@ -44,7 +44,9 @@ def test_sqrt() -> None:
 
 def test_sqrt_yosys_synth() -> None:
     design.tb.parameters["G_IN_WIDTH"] = 32
-    f = xeda_runner.run_flow(Yosys, design, {"fpga": {"part": "LFE5U-25F-6BG381C"}, "clock_period": 10.0})
+    f = xeda_runner.run_flow(
+        Yosys, design, {"fpga": {"part": "LFE5U-25F-6BG381C"}, "clock_period": 10.0}
+    )
     assert f.succeeded
 
 

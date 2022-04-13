@@ -3,9 +3,8 @@
 --! @brief             Pallell-In, Serial-Out width converter
 --! @author            Kamyar Mohajerani
 --! @copyright         Copyright (c) 2022
---! @license           Solderpad Hardware License v2.1 https://solderpad.org/licenses/SHL-2.1/
---!                    SPDX Identifier: SHL-2.1
---! @vhdl              Compatible with VHDL 1993, 2002, 2008
+--! @license           [Solderpad Hardware License v2.1 (SHL-2.1)](https://solderpad.org/licenses/SHL-2.1/)
+--! @vhdl              VHDL 1993, 2002, 2008, and later
 --!
 --! @details           Multi-purpose PISO implementation
 --!
@@ -25,18 +24,17 @@ entity PISO is
     generic(
         --! Output width in bits
         G_OUT_W      : positive;
-        --! Ratio of input width to output width. Input width is G_N * G_OUT_W
+        --! Ratio of input width to output width. Input width is `G_N * G_OUT_W`
         --! i.e., the number of serial output words per parallel input
         G_N          : positive;
         --! with valid-bytes input/output, where each bit determins if a corresponding byte is valid  data
-        --! This implementation does not support empty input/output words
         G_SUBWORD    : boolean  := FALSE;
-        --! Input and output data are in G_CHANNELS independent "channels".
+        --! Input and output data are in `G_CHANNELS` independent "channels".
         --!    Used e.g., in masked LWC implementations
         G_CHANNELS   : positive := 1;
-        --! When TRUE, reset is asynchronous and active-low
+        --! When `TRUE`, reset is asynchronous and active-low
         G_ASYNC_RSTN : boolean  := FALSE;
-        --! When TRUE, the first output word is the slice of the input with most-significant bits
+        --! When `TRUE`, the first output word is the slice of the input with most-significant bits
         G_BIGENDIAN  : boolean  := TRUE
     );
     port(
@@ -90,12 +88,14 @@ begin
         --==================================================== Wires ================================================--
         signal nx_valids                   : std_logic_vector(valids'range);
         signal valid_words                 : std_logic_vector(G_N - 1 downto 0);
-        signal in_fire, out_fire, is_empty : boolean;
+        signal in_fire, out_fire           : boolean;
+        signal is_empty                    : boolean;
         signal s_out_valid_o, p_in_ready_o : boolean;
         signal last_or_empty               : std_logic;
     begin
 
-        assert FALSE report LF & "PISO instance parameters:" --
+        assert FALSE
+        report LF & "PISO instance parameters:" --
         & LF & "  G_OUT_W       " & integer'image(G_OUT_W) --
         & LF & "  G_N           " & integer'image(G_N) --
         & LF & "  G_CHANNELS    " & integer'image(G_CHANNELS) --
@@ -112,10 +112,20 @@ begin
         s_out_valid   <= '1' when s_out_valid_o else '0';
         is_empty      <= valid_words(0) = '0';
         last_or_empty <= not valid_words(1);
-        s_out_last    <= last_p_in and last_or_empty; -- not empty when s_out_valid
+        s_out_last    <= last_p_in and last_or_empty; -- buffer is not empty when s_out_valid = '1'
 
-        GEN_proc_SYNC_RST : if not G_ASYNC_RSTN generate
-            process(clk)
+        GEN_ASYNC_RSTN : if G_ASYNC_RSTN generate
+            process(clk, rst) is
+            begin
+                if rst = '0' then
+                    valids(0) <= '0';
+                elsif rising_edge(clk) then
+                    valids <= nx_valids;
+                end if;
+            end process;
+        end generate GEN_ASYNC_RSTN;
+        GEN_NOT_ASYNC_RSTN : if not G_ASYNC_RSTN generate
+            process(clk) is
             begin
                 if rising_edge(clk) then
                     if rst = '1' then
@@ -125,17 +135,7 @@ begin
                     end if;
                 end if;
             end process;
-        end generate GEN_proc_SYNC_RST;
-        GEN_proc_ASYNC_RSTN : if G_ASYNC_RSTN generate
-            process(clk, rst)
-            begin
-                if rst = '0' then
-                    valids(0) <= '0';
-                elsif rising_edge(clk) then
-                    valids <= nx_valids;
-                end if;
-            end process;
-        end generate GEN_proc_ASYNC_RSTN;
+        end generate GEN_NOT_ASYNC_RSTN;
 
         GEN_SUBWORD : if G_SUBWORD generate
             signal valids_init : std_logic_vector(W_VB - 1 downto 0);
@@ -148,18 +148,19 @@ begin
                          (W_OVB - 1 downto 0 => '0') & valids(W_VB - 1 downto W_OVB) when out_fire else
                          valids;
 
-            GEN_VALIDS_INIT_BIGENDIAN : if G_BIGENDIAN generate
+            GEN_BIGENDIAN : if G_BIGENDIAN generate
                 GEN_REVERSE_IN : for i in p_in_keep'range generate
                     valids_init(i) <= p_in_keep(p_in_keep'length - 1 - i);
                 end generate;
                 GEN_REVERSE_OUT : for i in s_out_keep'range generate
                     s_out_keep(i) <= valids(W_OVB - 1 - i);
                 end generate;
-            end generate;
-            GEN_VALIDS_INIT_LITTLEENDIAN : if not G_BIGENDIAN generate
+            end generate GEN_BIGENDIAN;
+            GEN_NOT_BIGENDIAN : if not G_BIGENDIAN generate
                 s_out_keep  <= valids(s_out_keep'range);
                 valids_init <= p_in_keep;
-            end generate;
+            end generate GEN_NOT_BIGENDIAN;
+
         end generate GEN_SUBWORD;
         GEN_NOT_SUBWORD : if not G_SUBWORD generate
         begin
@@ -176,14 +177,14 @@ begin
             begin
                 GEN_BIGENDIAN : if G_BIGENDIAN generate
                     pin_array(G_N - 1 - i)(ch) <= pd;
-                end generate;
+                end generate GEN_BIGENDIAN;
                 GEN_NOT_BIGENDIAN : if not G_BIGENDIAN generate
                     pin_array(i)(ch) <= pd;
-                end generate;
+                end generate GEN_NOT_BIGENDIAN;
             end generate;
         end generate;
 
-        process(clk)
+        process(clk) is
         begin
             if rising_edge(clk) then
                 if in_fire then
@@ -203,4 +204,4 @@ begin
 
     end generate GEN_NONTRIVIAL;
 
-end architecture;
+end architecture RTL;

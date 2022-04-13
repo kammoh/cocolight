@@ -4,7 +4,7 @@
 --! @copyright     Copyright (c) 2022
 --! @license       Solderpad Hardware License v2.1 (SHL-2.1)
 --! @brief         Compute square-root of an integer
---! @vhdl          VHDL 2008
+--! @vhdl          VHDL 2008 and later
 --!
 --! @description   
 --!                Based on the SystemVerilog implementation by Will Green 

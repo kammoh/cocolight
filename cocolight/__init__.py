@@ -435,7 +435,7 @@ class CModel:
         cdefs = "\n".join(self.func_prototypes)
         ffibuilder.cdef(cdefs)
         ffibuilder.set_source(
-            f"_cmodel",
+            "_cmodel",
             cdefs,
             sources=self.sources,
             library_dirs=[],
