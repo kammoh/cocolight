@@ -96,6 +96,8 @@ def concat_bv(x: BinaryValue, y: BinaryValue) -> BinaryValue:
 
 
 def bv_repr(bv: BinaryValue) -> str:
+    if not isinstance(bv, BinaryValue):
+        return str(bv)
     try:
         if bv.n_bits:
             return f"0x{bv.integer:0{(bv.n_bits + 3) // 4}x}"
@@ -180,12 +182,12 @@ class ValidReadyInterface:
     def __init__(
         self,
         dut: DUT,
-        clock,
+        clock: Union[str, ModifiableObject],
         prefix: str,
         data_suffix: Union[str, List[str]] = "data",
-        sep="_",
-        timeout=2000,
-        back_pressure: Union[None, Tuple[int, int]] = (0, 5),
+        sep: str="_",
+        timeout: Optional[int] = None,
+        back_pressure: Union[None, Tuple[int, int], int] = None,
     ) -> None:
         self.dut = dut
         if isinstance(clock, str):
@@ -224,7 +226,7 @@ class ValidReadyDriver(ValidReadyInterface):
         data_suffix: Union[str, List[str]] = "data",
         sep="_",
         timeout=2000,
-        back_pressure=(0, 5),
+        back_pressure: Union[None, Tuple[int, int], int] = None,
     ) -> None:
         super().__init__(dut, clock, prefix, data_suffix, sep, timeout, back_pressure)
         self.valid_sig.setimmediatevalue(0)
@@ -236,6 +238,8 @@ class ValidReadyDriver(ValidReadyInterface):
         if isinstance(self.data_sig, dict):
             assert isinstance(data, dict)
             for name, v in data.items():
+                if not isinstance(v, (int, bool, BinaryValue)):
+                    v = BinaryValue(v)
                 self.data_sig[name].value = v
             # TODO put_rand ?
         else:
@@ -259,8 +263,8 @@ class ValidReadyMonitor(ValidReadyInterface):
         prefix: str,
         data_suffix: Union[str, List[str]] = "data",
         sep="_",
-        timeout=2000,
-        back_pressure=(0, 3),
+        timeout: Optional[int] = None,
+        back_pressure: Union[None, Tuple[int, int], int] = None,
     ) -> None:
         super().__init__(dut, clock, prefix, data_suffix, sep, timeout, back_pressure)
         self.ready_sig.setimmediatevalue(0)
@@ -290,11 +294,15 @@ class ValidReadyMonitor(ValidReadyInterface):
         if isinstance(out, dict):
             assert isinstance(expected, dict), "output has multiple data fields"
             for name, v in expected.items():
+                if not isinstance(v, (BinaryValue)):
+                    v = BinaryValue(v)
                 if out[name] != v:
                     raise ValueError(f"Field {name} does not match! Received: {bv_repr(out[name])}, expected: {bv_repr(v)}")
                 
         else:
             assert isinstance(out, BinaryValue)
+            if not isinstance(expected, (BinaryValue)):
+                    expected = BinaryValue(expected)
             if out != expected:
                 # fmt: off
                 raise ValueError(f"out={bv_repr(out)}, expected={bv_repr(expected)}")
@@ -383,11 +391,11 @@ class LightTb:
 
 
 class ValidReadyTb(LightTb):
-    def driver(self, prefix, **kwargs) -> ValidReadyDriver:
-        return ValidReadyDriver(self.dut, self.clock_sig, prefix, **kwargs)
+    def driver(self, prefix, timeout=1000,back_pressure=(0,3), **kwargs) -> ValidReadyDriver:
+        return ValidReadyDriver(self.dut, self.clock_sig, prefix, timeout=timeout, back_pressure=back_pressure, **kwargs)
 
-    def monitor(self, prefix, **kwargs) -> ValidReadyMonitor:
-        return ValidReadyMonitor(self.dut, self.clock_sig, prefix, **kwargs)
+    def monitor(self, prefix, timeout=1000, back_pressure=(0,5), **kwargs) -> ValidReadyMonitor:
+        return ValidReadyMonitor(self.dut, self.clock_sig, prefix, timeout=timeout, back_pressure=back_pressure, **kwargs)
 
 
 class CModel:

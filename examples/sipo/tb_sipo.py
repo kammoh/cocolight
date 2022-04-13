@@ -3,10 +3,8 @@ import os
 import random
 from functools import reduce
 from itertools import zip_longest
-from typing import List
 
 import cocotb
-from box import Box
 from cocolight import DUT, ValidReadyTb, cocotest, concat_bv
 from cocotb.binary import BinaryValue
 
