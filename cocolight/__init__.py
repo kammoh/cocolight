@@ -5,14 +5,28 @@ import logging
 import random
 import uuid
 from collections.abc import Coroutine
-from typing import Any, Awaitable, Callable, Dict, Iterable, List, Optional, Protocol, Tuple, Type, TypeVar, Union
+from typing import (
+    Any,
+    Awaitable,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Protocol,
+    Tuple,
+    Type,
+    TypeVar,
+    Union,
+)
 
 import cocotb
 from attrs import define
 from box import Box
+from cffi import FFI
 from cocotb.binary import BinaryValue
 from cocotb.clock import Clock
-from cocotb.handle import (ConstantObject, HierarchyObject, ModifiableObject)
+from cocotb.handle import ConstantObject, HierarchyObject, ModifiableObject
 from cocotb.triggers import RisingEdge, Timer
 from cocotb.types import LogicArray, concat
 
@@ -56,7 +70,7 @@ def cocotest(
     [CT], Union[Coroutine[Any, Any, None], Awaitable[None]]
 ]:  # Union[Callable[[CT], Coroutine[Any, Any, None]], Coroutine[Any, Any, None], Any]:
     def wrap(coro: CT) -> Awaitable[None]:
-        return cocotb.test(
+        return cocotb.test(  # pylint: disable=E1120
             timeout_time=timeout_time,
             timeout_unit=timeout_unit,
             expect_fail=expect_fail,
@@ -69,8 +83,7 @@ def cocotest(
 
     if f is None:  # with parenthesis (and possibly arguments)
         return wrap
-    else:
-        return wrap(f)  # type: ignore
+    return wrap(f)  # type: ignore
 
 
 def concat_bv(x: BinaryValue, y: BinaryValue) -> BinaryValue:
@@ -83,8 +96,7 @@ def bv_repr(bv: BinaryValue) -> str:
     try:
         if bv.n_bits:
             return f"0x{bv.integer:0{(bv.n_bits + 3) // 4}x}"
-        else:
-            return f"0x{bv.integer:x}"
+        return f"0x{bv.integer:x}"
     except ValueError:
         return bv.binstr
 
@@ -161,16 +173,17 @@ class ValidReadyInterface:
         if isinstance(clock, str):
             clock = getattr(dut, clock)
         self.data_sig: Union[ModifiableObject, Dict[Union[str, None], ModifiableObject]]
+
         def _get_sig(ds):
             name = prefix if ds is None else prefix + sep + ds
             return getattr(dut, name)
+
         if data_suffix is None or isinstance(data_suffix, str):
             self.data_sig = _get_sig(data_suffix)
         elif isinstance(data_suffix, (Iterable, list)):
-            self.data_sig = {ds:_get_sig(ds) for ds in data_suffix}
+            self.data_sig = {ds: _get_sig(ds) for ds in data_suffix}
         else:
-            raise TypeError(
-                f"unsupported type for data_suffix: {type(data_suffix)}")
+            raise TypeError(f"unsupported type for data_suffix: {type(data_suffix)}")
 
         self.clock = clock
         self.clock_edge = RisingEdge(clock)
@@ -267,26 +280,25 @@ class ValidReadyMonitor(ValidReadyInterface):
     async def expect(self, expected):
         out = await self.dequeue()
         if isinstance(out, dict):
-            assert isinstance(
-                expected, dict), "output has multiple data fields"
+            assert isinstance(expected, dict), "output has multiple data fields"
             for name, v in expected.items():
                 if not isinstance(v, (BinaryValue)):
                     v = BinaryValue(v)
                 if out[name] != v:
                     raise ValueError(
-                        f"Field {name} does not match! Received: {bv_repr(out[name])}, expected: {bv_repr(v)}")
-
+                        f"Field {name} does not match! Received: {bv_repr(out[name])}, expected: {bv_repr(v)}"
+                    )
         else:
             assert isinstance(out, BinaryValue)
             if not isinstance(expected, (BinaryValue)):
                 expected = BinaryValue(expected)
             if out != expected:
-                # fmt: off
                 raise ValueError(f"out={bv_repr(out)}, expected={bv_repr(expected)}")
 
     async def expect_seq(self, values):
         for expected in values:
             await self.expect(expected)
+
 
 T = TypeVar("T", int, bool, str, float, BinaryValue)
 
@@ -318,12 +330,12 @@ class LightTb:
                 Clock(self.clock_sig, period, units=units).start()
             )
         else:
-            self.log.critical(f"No clocks found!")
+            self.log.critical("No clocks found!")
         if self.reset_sig:
             self.reset_value = 1 if self.reset_cfg.active_high else 0
             self.reset_sig.setimmediatevalue(not self.reset_value)
         else:
-            self.log.warning(f"No resets found. Specified reset signal: {reset.port}")
+            self.log.warning("No resets found. Specified reset signal: %s", reset.port)
 
     def dut_attr(self, attr):
         return getattr(self.dut, attr)
@@ -364,30 +376,49 @@ class LightTb:
             await self._reset_sync()
         else:
             await self._reset_async()
-        self.reset_sig._log.debug("Reset complete")
+        self.reset_sig._log.debug("Reset complete")  # pylint: disable=W0212
 
 
 class ValidReadyTb(LightTb):
-    def driver(self, 
+    def driver(
+        self,
         prefix: str,
-        data_suffix: Union[None, str, List[Union[None,str]]] = "data",
-        sep:str="_",
-        timeout:Optional[int]=1000,
+        data_suffix: Union[None, str, List[Union[None, str]]] = "data",
+        sep: str = "_",
+        timeout: Optional[int] = 1000,
         back_pressure=(0, 3),
-        **kwargs
+        **kwargs,
     ) -> ValidReadyDriver:
-        return ValidReadyDriver(self.dut, self.clock_sig, prefix, data_suffix=data_suffix, sep=sep, timeout=timeout, back_pressure=back_pressure, **kwargs)
+        return ValidReadyDriver(
+            self.dut,
+            self.clock_sig,
+            prefix,
+            data_suffix=data_suffix,
+            sep=sep,
+            timeout=timeout,
+            back_pressure=back_pressure,
+            **kwargs,
+        )
 
     def monitor(
-        self,  
+        self,
         prefix: str,
         data_suffix: Union[None, str, List[Union[str, None]]] = "data",
-        sep:str="_",
-        timeout:Optional[int]=1000,
+        sep: str = "_",
+        timeout: Optional[int] = 1000,
         back_pressure=(0, 5),
-        **kwargs
+        **kwargs,
     ) -> ValidReadyMonitor:
-        return ValidReadyMonitor(self.dut, self.clock_sig, prefix, data_suffix=data_suffix, sep=sep, timeout=timeout, back_pressure=back_pressure, **kwargs)
+        return ValidReadyMonitor(
+            self.dut,
+            self.clock_sig,
+            prefix,
+            data_suffix=data_suffix,
+            sep=sep,
+            timeout=timeout,
+            back_pressure=back_pressure,
+            **kwargs,
+        )
 
 
 class CModel:
@@ -398,7 +429,6 @@ class CModel:
         self.func_prototypes: List[str] = []
 
     def compile(self):
-        from cffi import FFI
 
         ffibuilder = FFI()
         # name = 'trivium64'
