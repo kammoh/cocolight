@@ -48,14 +48,14 @@ async def test_sipo(dut: DUT, num_tests: int = NUM_TV, debug=False):
     G_ASYNC_RSTN = tb.get_value("G_ASYNC_RSTN", bool)
     G_PIPELINED = tb.get_value("G_PIPELINED", bool)
     G_BIGENDIAN = tb.get_value("G_BIGENDIAN", bool)
-    G_WITH_LAST = tb.get_value("G_WITH_LAST", bool)
+    G_SUBWORD = tb.get_value("G_SUBWORD", bool)
     G_CLEAR_INVALIDS = tb.get_value("G_CLEAR_INVALIDS", bool)
 
     def concat_words(g):
         return reduce(concat_bv, g if G_BIGENDIAN else reversed(g))
 
     tb.log.info(
-        "[%s] G_IN_W:%d G_N:%d G_CHANNELS:%d G_ASYNC_RSTN:%s G_PIPELINED:%s G_BIGENDIAN:%s G_WITH_LAST:%s G_CLEAR_INVALIDS:%s num_tests:%d",
+        "[%s] G_IN_W:%d G_N:%d G_CHANNELS:%d G_ASYNC_RSTN:%s G_PIPELINED:%s G_BIGENDIAN:%s G_SUBWORD:%s G_CLEAR_INVALIDS:%s num_tests:%d",
         str(dut),
         G_IN_W,
         G_N,
@@ -63,14 +63,14 @@ async def test_sipo(dut: DUT, num_tests: int = NUM_TV, debug=False):
         G_ASYNC_RSTN,
         G_PIPELINED,
         G_BIGENDIAN,
-        G_WITH_LAST,
+        G_SUBWORD,
         G_CLEAR_INVALIDS,
         num_tests,
     )
 
     for test in range(num_tests):
         num_in_words = random.randint(1, 10 * G_N)
-        if not G_WITH_LAST or G_PIPELINED:
+        if not G_SUBWORD or G_PIPELINED:
             # round up to multiple of G_N
             num_in_words = (num_in_words + G_N - 1) // G_N * G_N
         in_channels = [
@@ -79,7 +79,7 @@ async def test_sipo(dut: DUT, num_tests: int = NUM_TV, debug=False):
         ]
         in_data = [{"data": concat_words(g), "last": 0} for g in zip(*in_channels)]
 
-        if G_WITH_LAST:
+        if G_SUBWORD:
             in_data[-1]["last"] = 1
 
         expected_outputs_of_channel = [
@@ -98,7 +98,7 @@ async def test_sipo(dut: DUT, num_tests: int = NUM_TV, debug=False):
             {"data": concat_words(per_channel), "last": 0}
             for per_channel in zip(*expected_outputs_of_channel)
         ]
-        if G_WITH_LAST and not G_PIPELINED:
+        if G_SUBWORD and not G_PIPELINED:
             expected_outputs[-1]["last"] = 1
 
         stimulus = cocotb.start_soon(sin_driver.enqueue_seq(in_data))
