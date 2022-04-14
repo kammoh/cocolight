@@ -11,9 +11,11 @@ from typing import (
     Callable,
     Dict,
     Iterable,
+    Iterator,
     List,
     Optional,
     Protocol,
+    Sequence,
     Tuple,
     Type,
     TypeVar,
@@ -168,8 +170,13 @@ class ValidReadyInterface:
         sep: str = "_",
         timeout: Optional[int] = None,
         back_pressure: Union[None, Tuple[int, int], int] = None,
+        debug: bool = False,
     ) -> None:
         self.dut = dut
+        self.log = dut._log
+        if debug:
+            self.log.setLevel(logging.DEBUG)
+        self.debug = debug
         if isinstance(clock, str):
             clock = getattr(dut, clock)
         self.data_sig: Union[ModifiableObject, Dict[Union[str, None], ModifiableObject]]
@@ -184,7 +191,6 @@ class ValidReadyInterface:
             self.data_sig = {ds: _get_sig(ds) for ds in data_suffix}
         else:
             raise TypeError(f"unsupported type for data_suffix: {type(data_suffix)}")
-
         self.clock = clock
         self.clock_edge = RisingEdge(clock)
         self.valid_sig: ModifiableObject = getattr(dut, prefix + sep + "valid")
@@ -215,8 +221,18 @@ class ValidReadyDriver(ValidReadyInterface):
         sep: str = "_",
         timeout: Optional[int] = None,
         back_pressure: Union[None, Tuple[int, int], int] = None,
+        debug=False,
     ) -> None:
-        super().__init__(dut, clock, prefix, data_suffix, sep, timeout, back_pressure)
+        super().__init__(
+            dut,
+            clock,
+            prefix,
+            data_suffix=data_suffix,
+            sep=sep,
+            timeout=timeout,
+            back_pressure=back_pressure,
+            debug=debug,
+        )
         self.valid_sig.setimmediatevalue(0)
 
     async def enqueue(self, data: Union[PutableData, dict[str, PutableData]]):
@@ -239,6 +255,7 @@ class ValidReadyDriver(ValidReadyInterface):
     async def enqueue_seq(
         self, data: Iterable[Union[PutableData, dict[str, PutableData]]]
     ):
+        self.log.debug("enqueuing: %s", data)
         for d in data:
             await self.enqueue(d)
 
@@ -280,13 +297,20 @@ class ValidReadyMonitor(ValidReadyInterface):
     async def expect(self, expected):
         out = await self.dequeue()
         if isinstance(out, dict):
-            assert isinstance(expected, dict), "output has multiple data fields"
+            if not isinstance(expected, dict):
+                raise TypeError(
+                    f"expected value must be a dictionary when the output port has multiple data fields ({out.keys()})."
+                )
             for name, v in expected.items():
                 if not isinstance(v, (BinaryValue)):
                     v = BinaryValue(v)
-                if out[name] != v:
+                try:
+                    failed = out[name].value != v.value
+                except ValueError:
+                    failed = out[name].binstr != v.binstr
+                if failed:
                     raise ValueError(
-                        f"Field {name} does not match! Received: {bv_repr(out[name])}, expected: {bv_repr(v)}"
+                        f"Field '{name}' (signal: '{self.data_sig[name]._name}') does not match the expected value!\n  **  Received: {bv_repr(out[name])}  expected: {bv_repr(v)} **"
                     )
         else:
             assert isinstance(out, BinaryValue)
@@ -295,9 +319,21 @@ class ValidReadyMonitor(ValidReadyInterface):
             if out != expected:
                 raise ValueError(f"out={bv_repr(out)}, expected={bv_repr(expected)}")
 
-    async def expect_seq(self, values):
-        for expected in values:
-            await self.expect(expected)
+    async def expect_seq(self, seq: Union[Sequence, Iterator]):
+        for i, expected in enumerate(seq):
+            try:
+                await self.expect(expected)
+            except ValueError as e:
+                extra = (
+                    f"/{len(seq)}" if isinstance(seq, (Sequence, list, tuple)) else ""
+                )
+                self.log.debug(
+                    "Failed item #%d%s of the expected sequence", i + 1, extra
+                )
+                raise ValueError(
+                    f"Failed item #{i+1}{extra} of the expected sequence.\n  "
+                    + e.args[0]
+                ) from None
 
 
 T = TypeVar("T", int, bool, str, float, BinaryValue)
@@ -389,6 +425,8 @@ class ValidReadyTb(LightTb):
         back_pressure=(0, 3),
         **kwargs,
     ) -> ValidReadyDriver:
+        if "debug" not in kwargs:
+            kwargs["debug"] = self.debug
         return ValidReadyDriver(
             self.dut,
             self.clock_sig,

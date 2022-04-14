@@ -13,7 +13,6 @@
 --! @parameters    G_IN_WIDTH: width of input
 --!
 --===============================================================================================--
-
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;

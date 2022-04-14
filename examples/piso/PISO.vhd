@@ -3,7 +3,8 @@
 --! @brief             Pallell-In, Serial-Out width converter
 --! @author            Kamyar Mohajerani
 --! @copyright         Copyright (c) 2022
---! @license           [Solderpad Hardware License v2.1 (SHL-2.1)](https://solderpad.org/licenses/SHL-2.1/)
+--! @license           Solderpad Hardware License v2.1 ([SHL-2.1](https://solderpad.org/licenses/SHL-2.1/))
+--!                    
 --! @vhdl              VHDL 1993, 2002, 2008, and later
 --!
 --! @details           Multi-purpose PISO implementation
@@ -15,7 +16,6 @@
 --!
 --! @note              This implementation does not support empty input/output words
 --===============================================================================================--
-
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
@@ -27,11 +27,11 @@ entity PISO is
         --! Ratio of input width to output width. Input width is `G_N * G_OUT_W`
         --! i.e., the number of serial output words per parallel input
         G_N          : positive;
-        --! with valid-bytes input/output, where each bit determins if a corresponding byte is valid  data
-        G_SUBWORD    : boolean  := FALSE;
         --! Input and output data are in `G_CHANNELS` independent "channels".
         --!    Used e.g., in masked LWC implementations
         G_CHANNELS   : positive := 1;
+        --! with valid-bytes input/output, where each bit determins if a corresponding byte is valid  data
+        G_SUBWORD    : boolean  := FALSE;
         --! When `TRUE`, reset is asynchronous and active-low
         G_ASYNC_RSTN : boolean  := FALSE;
         --! When `TRUE`, the first output word is the slice of the input with most-significant bits
@@ -99,9 +99,9 @@ begin
         & LF & "  G_OUT_W       " & integer'image(G_OUT_W) --
         & LF & "  G_N           " & integer'image(G_N) --
         & LF & "  G_CHANNELS    " & integer'image(G_CHANNELS) --
+        & LF & "  G_SUBWORD     " & boolean'image(G_SUBWORD) --
         & LF & "  G_ASYNC_RSTN  " & boolean'image(G_ASYNC_RSTN) --
         & LF & "  G_BIGENDIAN   " & boolean'image(G_BIGENDIAN) --
-        & LF & "  G_SUBWORD     " & boolean'image(G_SUBWORD) --
         severity NOTE;
 
         in_fire       <= p_in_valid = '1' and p_in_ready_o;
