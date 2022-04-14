@@ -1,5 +1,6 @@
 [project]
 name = "cocolight"
+description = "cocoLight: Lightweight cocotb verification library"
 readme = "README.rst"
 requires-python = ">=3.8"
 license = { file = "LICENSE.txt" }
@@ -20,7 +21,7 @@ classifiers = [
   "Development Status :: 4 - Beta",
   "Programming Language :: Python",
 ]
-dynamic = ["version", "description"]
+dynamic = ["version"]
 
 dependencies = [
   "cocotb~=1.6",
@@ -37,7 +38,7 @@ test = ["pytest > 7", "pytest-cov[all]"]
 homepage = "https://github.com/kammoh/cocolight"
 # documentation = "readthedocs.org"
 repository = "https://github.com/kammoh/cocolight.git"
-# changelog = "https://github.com/kammoh/cocolight/main/CHANGELOG.md"
+changelog = "https://github.com/kammoh/cocolight/blob/main/CHANGELOG.md"
 
 [build-system]
 requires = ["setuptools >= 61", "wheel", "setuptools_scm[toml] >= 6.2"]
