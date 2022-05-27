@@ -5,30 +5,30 @@ readme = "README.rst"
 requires-python = ">=3.8"
 license = { file = "LICENSE.txt" }
 keywords = [
-  "cocotb",
-  "HDL",
-  "Hardware",
-  "verification",
-  "VHDL",
-  "Verilog",
-  "simulation",
-  "EDA",
-  "FPGA",
+    "cocotb",
+    "HDL",
+    "Hardware",
+    "verification",
+    "VHDL",
+    "Verilog",
+    "simulation",
+    "EDA",
+    "FPGA",
 ]
 authors = [{ email = "kammoh@gmail.com" }, { name = "Kamyar Mohajerani" }]
 # maintainers = []
 classifiers = [
-  "Development Status :: 4 - Beta",
-  "Programming Language :: Python",
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python",
 ]
 dynamic = ["version"]
 
 dependencies = [
-  "cocotb~=1.6",
-  "attrs>=21",
-  # the following deps should become optional:
-  "python-box>=6",
-  "cffi>=1.14",
+    "cocotb >= 1.6.2",
+    "attrs ~= 21.4",
+    "attrs-strict ~= 1.0",
+    # the following deps should become optional:
+    "cffi >= 1.14",
 ]
 
 [project.optional-dependencies]
@@ -44,6 +44,9 @@ changelog = "https://github.com/kammoh/cocolight/blob/main/CHANGELOG.md"
 requires = ["setuptools >= 61", "wheel", "setuptools_scm[toml] >= 6.2"]
 build-backend = "setuptools.build_meta"
 
+[tool.setuptools]
+packages = ["cocolight"]
+
 [tool.setuptools_scm]
 write_to = "cocolight/_version.py"
 write_to_template = '__version__ = "{version}"'
@@ -52,24 +55,24 @@ write_to_template = '__version__ = "{version}"'
 [tool.pylint.messages_control]
 max-line-length = 120
 disable = [
-  "line-too-long",
-  # "invalid-name",
-  "too-few-public-methods",
-  # "unspecified-encoding",
-  "missing-function-docstring",
-  "too-many-instance-attributes",
-  "too-many-statements",
-  "too-many-branches",
-  "too-many-locals",
-  "too-many-arguments",
-  "too-many-nested-blocks",
-  # to be removed:
-  # "missing-module-docstring",
-  # "unused-argument",
-  # "fixme",
-  # "f-string-without-interpolation",
-  # "wrong-import-order",
-  # "missing-class-docstring",
+    "line-too-long",
+    # "invalid-name",
+    "too-few-public-methods",
+    # "unspecified-encoding",
+    "missing-function-docstring",
+    "too-many-instance-attributes",
+    "too-many-statements",
+    "too-many-branches",
+    "too-many-locals",
+    "too-many-arguments",
+    "too-many-nested-blocks",
+    # to be removed:
+    # "missing-module-docstring",
+    # "unused-argument",
+    # "fixme",
+    # "f-string-without-interpolation",
+    # "wrong-import-order",
+    # "missing-class-docstring",
 ]
 
 [tool.pylint.similarities]
@@ -98,19 +101,19 @@ max_line_length = 120
 # pyflakes = ["+*", "-F401"]
 pyflakes = ["+*"]
 pycodestyle = [
-  "+*",
-  "-E501", # line too long
-  "-C812", # missing trailing comma
+    "+*",
+    "-E501", # line too long
+    "-C812", # missing trailing comma
 
 ]
 # enable only codes from S100 to S199
 # flake8-bandit = ["-*", "+S1??"]
 flake8-bandit = [
-  "+*",
-  "-S603",
-  "-S404", # subprocess
-  "-S101", # asserts
-  "-S311", # random crypto
+    "+*",
+    "-S603",
+    "-S404", # subprocess
+    "-S101", # asserts
+    "-S311", # random crypto
 ]
 # enable everything that starts from `flake8-`
 "flake8-*" = ["+*"]

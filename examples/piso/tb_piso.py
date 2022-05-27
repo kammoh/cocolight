@@ -3,31 +3,15 @@ import os
 import random
 from functools import reduce
 from itertools import zip_longest
+from operator import concat
 
 import cocotb
-from cocolight import DUT, ValidReadyTb, cocotest, concat_bv
+from cocolight import DUT, ValidReadyTb, cocotest, grouper
 from cocotb.binary import BinaryValue
 
+from cocolight.utils import concat_bitvectors, concat_bv
+
 NUM_TV = int(os.environ.get("NUM_TV", 100))
-
-
-class Incomplete(enum.Enum):
-    Ignore = enum.auto()
-    Fill = enum.auto()
-    Strict = enum.auto()
-
-
-def grouper(iterable, n, *, incomplete: Incomplete = Incomplete.Ignore, fillvalue=None):
-    "Collect data into non-overlapping fixed-length chunks or blocks"
-    args = [iter(iterable)] * n
-    if incomplete == Incomplete.Fill:
-        return zip_longest(*args, fillvalue=fillvalue)
-    # if incomplete == 'strict':
-    #     return zip(*args, strict=True)
-    if incomplete == Incomplete.Ignore:
-        return zip(*args)
-    else:
-        raise ValueError("Expected fill, strict, or ignore")
 
 
 def random_bits(n: int) -> BinaryValue:
@@ -99,12 +83,11 @@ async def test_piso(dut: DUT, num_tests: int = NUM_TV, debug=False):
         ]
         expected_outputs_channels = [
             [
-                concat_words(g)
+                concat_bitvectors(*g)
                 for g in grouper(
                     data_bytes,
                     G_OUT_W // 8,
-                    incomplete=Incomplete.Fill,
-                    fillvalue=BinaryValue(0, n_bits=8),
+                    fill=BinaryValue(0, n_bits=8),
                 )
             ]
             for data_bytes in data_byte_channels
@@ -124,8 +107,7 @@ async def test_piso(dut: DUT, num_tests: int = NUM_TV, debug=False):
                 for g in grouper(
                     data_byte,
                     IN_WIDTH // 8,
-                    incomplete=Incomplete.Fill,
-                    fillvalue=BinaryValue(
+                    fill=BinaryValue(
                         0,
                         n_bits=data_byte[0].n_bits if data_byte else None,
                     ),

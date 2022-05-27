@@ -1,46 +1,56 @@
 """"Lightweight cocotb testbench library"""
 from __future__ import annotations
 
+import decimal
 import logging
+import numbers
 import random
-import uuid
 from collections.abc import Coroutine
 from typing import (
     Any,
     Awaitable,
     Callable,
-    Dict,
     Iterable,
     Iterator,
     List,
     Optional,
     Protocol,
     Sequence,
-    Tuple,
     Type,
     TypeVar,
     Union,
+    ContextManager,
+    AsyncContextManager,
 )
 
+import attrs
 import cocotb
-from attrs import define
-from box import Box
-from cffi import FFI
+from attr import attrib
+from attrs_strict import type_validator
 from cocotb.binary import BinaryValue
 from cocotb.clock import Clock
 from cocotb.handle import ConstantObject, HierarchyObject, ModifiableObject
 from cocotb.triggers import RisingEdge, Timer
-from cocotb.types import LogicArray, concat
+from cocotb import RunningTask
 
 try:
     from typing import TypeAlias  # type: ignore
 except ImportError:
-    from typing_extensions import TypeAlias
+    from typing_extensions import TypeAlias  # python < 3.10
 
+from .utils import grouper, UInt
+
+__all__ = [
+    "DUT",
+    "LightTb",
+    "ValidReadyInterface",
+    "ValidReadyMonitor",
+    "ValidReadyDriver",
+    "ValidReadyTb",
+    "grouper",
+]
 
 DUT: TypeAlias = HierarchyObject
-
-from .version import __version__
 
 
 class CocoTestCoroutine(Protocol):
@@ -62,12 +72,11 @@ def cocotest(
     f: Optional[CT] = None,
     /,
     *,
-    timeout_time=None,
-    timeout_unit="step",
-    expect_fail=False,
-    expect_error=(),
-    skip=False,
-    stage=None,
+    timeout_time: Optional[Union[numbers.Real, decimal.Decimal]] = None,
+    timeout_unit: str = "step",
+    expect_fail: bool = False,
+    skip: bool = False,
+    stage: Optional[int] = None,
 ) -> Callable[
     [CT], Union[Coroutine[Any, Any, None], Awaitable[None]]
 ]:  # Union[Callable[[CT], Coroutine[Any, Any, None]], Coroutine[Any, Any, None], Any]:
@@ -76,7 +85,6 @@ def cocotest(
             timeout_time=timeout_time,
             timeout_unit=timeout_unit,
             expect_fail=expect_fail,
-            expect_error=expect_error,
             skip=skip,
             stage=stage,
         )(  # type: ignore
@@ -86,10 +94,6 @@ def cocotest(
     if f is None:  # with parenthesis (and possibly arguments)
         return wrap
     return wrap(f)  # type: ignore
-
-
-def concat_bv(x: BinaryValue, y: BinaryValue) -> BinaryValue:
-    return concat(LogicArray(x), LogicArray(y)).to_BinaryValue()
 
 
 def bv_repr(bv: BinaryValue) -> str:
@@ -103,48 +107,20 @@ def bv_repr(bv: BinaryValue) -> str:
         return bv.binstr
 
 
-@define
+@attrs.define
 class DutReset:
-    port: str = "rst"
+    port: str
     active_high: bool = True
     synchronous: bool = True
 
 
-@define
+@attrs.define
 class DutClock:
-    port: str = "clk"
-    period: Tuple[float, str] = (10, "ns")
+    port: str
+    period: tuple[float, str] = (10.0, "ns")
 
 
-@define
-class IoPort:  # data + valid + ready
-    data_signal: Union[List[str], str]
-    valid_signal: Optional[str] = None
-    ready_signal: Optional[str] = None
-    name: Optional[str] = None
-    is_output: Optional[bool] = None
-
-    # TODO use attr validators instead!
-    def __attrs_post_init__(self) -> None:
-
-        if not self.name and self.data_signal:
-            self.name = (
-                self.data_signal
-                if isinstance(self.data_signal, str)
-                else self.data_signal[0]
-            )
-        if self.name:
-            if self.data_signal is None:
-                self.data_signal = self.name
-            if self.valid_signal is None:
-                self.valid_signal = self.name + "_valid"
-            if self.ready_signal is None:
-                self.ready_signal = self.name + "_ready"
-        else:
-            self.name = uuid.uuid1().bytes.decode("utf-8")
-
-
-PutableData = Union[int, str, bool, BinaryValue]
+BinaryValueType = Union[BinaryValue, int, str, bytes, bool]  # FIXME verify bool
 
 
 async def step_until(
@@ -155,72 +131,122 @@ async def step_until(
         await clock_edge
         if signal.value == trigger_value:
             break
-        wait_counter += 1
-        if timeout and wait_counter > timeout:
-            raise ValueError(f"timed out after {timeout} cycles")
+        if timeout:
+            wait_counter += 1
+            if wait_counter > timeout:
+                raise ValueError(f"timed out after {timeout} cycles")
+
+
+def to_binary_value(v: Any) -> BinaryValue:
+    if isinstance(v, BinaryValue):
+        return v
+    return BinaryValue(v)
 
 
 class ValidReadyInterface:
+    """
+    Abstraction of a bus with data (1 or more fields), valid, and ready signals
+    """
+
+    @attrs.define(slots=False)
+    class DataType:
+        pass
+
     def __init__(
         self,
         dut: DUT,
         clock: Union[str, ModifiableObject],
         prefix: str,
-        data_suffix: Union[None, str, List[Union[str, None]]] = "data",
+        data_suffix: Union[str, Sequence[str]] = "data",
         sep: str = "_",
+        valid_signal: Optional[str] = None,
+        ready_signal: Optional[str] = None,
         timeout: Optional[int] = None,
-        back_pressure: Union[None, Tuple[int, int], int] = None,
+        back_pressure: Union[None, tuple[int, int], int] = None,
         debug: bool = False,
     ) -> None:
         self.dut = dut
-        self.log = dut._log
+        logger_name = f"{self.__class__.__name__}.{dut._name}"
+        if prefix:
+            logger_name += "." + prefix
+        self.log = logging.getLogger(logger_name)
         if debug:
             self.log.setLevel(logging.DEBUG)
         self.debug = debug
         if isinstance(clock, str):
             clock = getattr(dut, clock)
-        self.data_sig: Union[ModifiableObject, Dict[Union[str, None], ModifiableObject]]
 
-        def _get_sig(ds):
-            name = prefix if ds is None else prefix + sep + ds
-            return getattr(dut, name)
+        def _get_sig(suffix: str):
+            # We assume signal/port name do not end with "_"
+            # VHDL: they can't! Verilog/SystemVerilog: horrible practice!
+            sig_name = prefix if not suffix else prefix + sep + suffix
+            return getattr(dut, sig_name)
 
-        if data_suffix is None or isinstance(data_suffix, str):
-            self.data_sig = _get_sig(data_suffix)
+        self.data_sig: dict[str, ModifiableObject]
+        assert data_suffix
+        if isinstance(data_suffix, str):
+            self.data_sig = {data_suffix: _get_sig(data_suffix)}
         elif isinstance(data_suffix, (Iterable, list)):
+            # TODO: check no duplicates in data_suffix
             self.data_sig = {ds: _get_sig(ds) for ds in data_suffix}
         else:
             raise TypeError(f"unsupported type for data_suffix: {type(data_suffix)}")
+        self.DataType = attrs.make_class(
+            self.DataType.__name__,
+            {
+                s: attrib(validator=type_validator(), converter=UInt, type=BinaryValue)
+                for s in self.data_sig
+            },
+            bases=(self.DataType,),
+        )
         self.clock = clock
         self.clock_edge = RisingEdge(clock)
-        self.valid_sig: ModifiableObject = getattr(dut, prefix + sep + "valid")
-        self.ready_sig: ModifiableObject = getattr(dut, prefix + sep + "ready")
-        self.timeout: Optional[int] = timeout
+        if not valid_signal:
+            valid_signal = prefix + sep + "valid"
+        if not ready_signal:
+            ready_signal = prefix + sep + "ready"
+        self.valid: ModifiableObject = getattr(dut, valid_signal)
+        self.ready: ModifiableObject = getattr(dut, ready_signal)
+        self.timeout = timeout
         self.stall_min: int = 0
         self.stall_max: int = 0
         if back_pressure:
             if isinstance(back_pressure, tuple):
                 assert len(back_pressure) == 2
-                self.stall_min = back_pressure[0]
-                self.stall_max = back_pressure[1]
-            elif isinstance(back_pressure, int):
+                self.stall_min, self.stall_max = back_pressure
+            else:
+                assert isinstance(back_pressure, int)
                 self.stall_max = back_pressure
+        if self.stall_min < 0 or self.stall_max < 0 or self.stall_min > self.stall_max:
+            raise ValueError(
+                "Invalid backpressure specified: 0 <= min <= max is not true."
+            )
 
     async def wait_stalls(self):
-        for _ in range(random.randrange(self.stall_min, self.stall_max)):
-            await self.clock_edge
+        if self.stall_max:
+            for _ in range(random.randrange(self.stall_min, self.stall_max)):
+                await self.clock_edge
+
+
+PokeDict = dict[str, Union[str, int, BinaryValue]]
 
 
 class ValidReadyDriver(ValidReadyInterface):
+    """
+    A valid/ready interface where the data is an input
+    """
+
     def __init__(
         self,
         dut: DUT,
         clock,
         prefix: str,
-        data_suffix: Union[None, str, List[Union[str, None]]] = "data",
+        data_suffix: Union[str, Sequence[str]] = "data",
         sep: str = "_",
+        valid_signal: Optional[str] = None,
+        ready_signal: Optional[str] = None,
         timeout: Optional[int] = None,
-        back_pressure: Union[None, Tuple[int, int], int] = None,
+        back_pressure: Union[None, tuple[int, int], int] = None,
         debug=False,
     ) -> None:
         super().__init__(
@@ -229,101 +255,127 @@ class ValidReadyDriver(ValidReadyInterface):
             prefix,
             data_suffix=data_suffix,
             sep=sep,
+            valid_signal=valid_signal,
+            ready_signal=ready_signal,
             timeout=timeout,
             back_pressure=back_pressure,
             debug=debug,
         )
-        self.valid_sig.setimmediatevalue(0)
+        self.valid.setimmediatevalue(0)
 
-    async def enqueue(self, data: Union[PutableData, dict[str, PutableData]]):
-        clock_edge = RisingEdge(self.clock)
+    async def enqueue(
+        self, data: Union[str, int, BinaryValue, PokeDict, ValidReadyDriver.DataType]
+    ):
         await self.wait_stalls()
-        self.valid_sig.value = 1
-        if isinstance(self.data_sig, dict):
-            assert isinstance(data, dict)
-            for name, v in data.items():
-                if not isinstance(v, (int, bool, BinaryValue)):
-                    v = BinaryValue(v)
-                self.data_sig[name].value = v
-            # TODO put_rand ?
-        else:
-            assert isinstance(data, (int, str, bool, BinaryValue))
-            self.data_sig.value = data
-        await step_until(self.ready_sig, clock_edge, timeout=self.timeout)
-        self.valid_sig.value = 0
+        self.valid.value = 1
+        if isinstance(data, (int, str, BinaryValue)):
+            data = {list(self.data_sig.keys())[0]: data}
+        if isinstance(data, self.DataType):
+            data = attrs.asdict(data)
+        for name, v in data.items():
+            # if not isinstance(v, (int, bool, BinaryValue)):
+            # v = BinaryValue(v)
+            self.data_sig[name].value = v
+        await step_until(self.ready, self.clock_edge, timeout=self.timeout)
+        self.valid.value = 0
+        # TODO set data to rand/0/x?
 
     async def enqueue_seq(
-        self, data: Iterable[Union[PutableData, dict[str, PutableData]]]
+        self,
+        data_seq: Iterable[
+            Union[str, int, BinaryValue, PokeDict, ValidReadyDriver.DataType]
+        ],
     ):
-        self.log.debug("enqueuing: %s", data)
-        for d in data:
-            await self.enqueue(d)
+        for data in data_seq:
+            await self.enqueue(data)
 
 
 class ValidReadyMonitor(ValidReadyInterface):
+    """
+    A valid/ready interface where the data signal(s) (and 'valid') are outputs
+    """
+
     def __init__(
         self,
         dut: DUT,
         clock,
         prefix: str,
-        data_suffix: Union[None, str, List[Union[str, None]]] = "data",
+        data_suffix: Union[str, Sequence[str]] = "data",
         sep="_",
+        valid_signal: Optional[str] = None,
+        ready_signal: Optional[str] = None,
         timeout: Optional[int] = None,
-        back_pressure: Union[None, Tuple[int, int], int] = None,
+        back_pressure: Union[None, tuple[int, int], int] = None,
     ) -> None:
-        super().__init__(dut, clock, prefix, data_suffix, sep, timeout, back_pressure)
-        self.ready_sig.setimmediatevalue(0)
+        super().__init__(
+            dut=dut,
+            clock=clock,
+            prefix=prefix,
+            data_suffix=data_suffix,
+            sep=sep,
+            valid_signal=valid_signal,
+            ready_signal=ready_signal,
+            timeout=timeout,
+            back_pressure=back_pressure,
+        )
+        self.ready.setimmediatevalue(0)
 
-    async def dequeue(self) -> Union[BinaryValue, Box]:
+    async def dequeue(self) -> ValidReadyMonitor.DataType:
         clock_edge = RisingEdge(self.clock)
         await self.wait_stalls()
-        self.ready_sig.value = 1
-        await step_until(self.valid_sig, clock_edge, timeout=self.timeout)
-        if isinstance(self.data_sig, dict):
-            data_dict = {}
-            for name, sig in self.data_sig.items():
-                data_dict[name] = sig.value
-            ret = Box(data_dict)
-        else:
-            ret = self.data_sig.value
-        self.ready_sig.value = 0
-        return ret
+        self.ready.value = 1
+        await step_until(self.valid, clock_edge, timeout=self.timeout)
+        data_dict = {}
+        for name, sig in self.data_sig.items():
+            data_dict[str(name)] = sig.value
+        self.ready.value = 0
+        return self.DataType(**data_dict)
 
-    async def dequeue_seq(
-        self, n: int
-    ) -> List[Union[BinaryValue, Dict[str, BinaryValue]]]:
-        return [await self.dequeue() for _ in range(n)]
+    async def dequeue_seq(self, num_words: int) -> list[ValidReadyMonitor.DataType]:
+        """receive a sequence of data from this interface
 
-    async def expect(self, expected):
-        out = await self.dequeue()
-        if isinstance(out, dict):
-            if not isinstance(expected, dict):
-                raise TypeError(
-                    f"expected value must be a dictionary when the output port has multiple data fields ({out.keys()})."
+        Args:
+            num_words (int): number of data elements to receive
+
+        Returns:
+            list[Union[BinaryValue, dict[str, BinaryValue]]]: list of data words received
+        """
+        return [await self.dequeue() for _ in range(num_words)]
+
+    async def expect(
+        self,
+        expected: Union[
+            dict[str, Union[BinaryValue, str, int, bool]], ValidReadyMonitor.DataType
+        ],
+    ):
+        out = attrs.asdict(await self.dequeue())
+        # if isinstance(out, dict):
+        # if not isinstance(expected, dict):
+        #     raise TypeError(
+        #         f"expected value must be a dictionary when the output port has multiple data fields ({out.keys()})."
+        #     )
+        if not isinstance(expected, dict):
+            expected = attrs.asdict(expected)
+        for name, v in expected.items():
+            if not isinstance(v, (BinaryValue,)):
+                v = BinaryValue(v)
+            try:
+                failed = out[name].value != v.value
+            except ValueError:
+                failed = out[name].binstr != v.binstr
+            if failed:
+                # noinspection PyProtectedMember
+                sig_name = self.data_sig[name]._name  # pylint: disable=protected-access
+                raise ValueError(
+                    f"Field '{name}' (signal: '{sig_name}') does not match the expected value!\n"
+                    + f"  **  Received: {bv_repr(out[name])}  expected: {bv_repr(v)} **"
                 )
-            for name, v in expected.items():
-                if not isinstance(v, (BinaryValue)):
-                    v = BinaryValue(v)
-                try:
-                    failed = out[name].value != v.value
-                except ValueError:
-                    failed = out[name].binstr != v.binstr
-                if failed:
-                    raise ValueError(
-                        f"Field '{name}' (signal: '{self.data_sig[name]._name}') does not match the expected value!\n  **  Received: {bv_repr(out[name])}  expected: {bv_repr(v)} **"
-                    )
-        else:
-            assert isinstance(out, BinaryValue)
-            if not isinstance(expected, (BinaryValue)):
-                expected = BinaryValue(expected)
-            if out != expected:
-                raise ValueError(f"out={bv_repr(out)}, expected={bv_repr(expected)}")
 
-    async def expect_seq(self, seq: Union[Sequence, Iterator]):
+    async def expect_seq(self, seq: Iterable):
         for i, expected in enumerate(seq):
             try:
                 await self.expect(expected)
-            except ValueError as e:
+            except ValueError as e:  # pylint: disable=invalid-name
                 extra = (
                     f"/{len(seq)}" if isinstance(seq, (Sequence, list, tuple)) else ""
                 )
@@ -331,7 +383,7 @@ class ValidReadyMonitor(ValidReadyInterface):
                     "Failed item #%d%s of the expected sequence", i + 1, extra
                 )
                 raise ValueError(
-                    f"Failed item #{i+1}{extra} of the expected sequence.\n  "
+                    f"Failed item #{i + 1}{extra} of the expected sequence.\n  "
                     + e.args[0]
                 ) from None
 
@@ -340,38 +392,42 @@ T = TypeVar("T", int, bool, str, float, BinaryValue)
 
 
 class LightTb:
+    """generates main clock and reset for the DUT"""
+
     def __init__(
         self,
         dut: DUT,
-        clock: DutClock = DutClock(),
-        reset: DutReset = DutReset(),
+        clock: Union[None, str, DutClock] = "clk",
+        reset: Union[None, str, DutReset] = "rst",
         debug: bool = False,
     ):
         self.dut = dut
-        self.log = logging.getLogger("cocotb_tb")
+        self.log = logging.getLogger(f"{self.__class__.__name__}.{dut._name}")
         self.log.setLevel(logging.DEBUG if debug else logging.INFO)
         self.debug = debug
 
+        if isinstance(clock, str):
+            clock = DutClock(port=clock)
+        if isinstance(reset, str):
+            reset = DutReset(port=reset)
+
         self.clock_cfg = clock
         self.reset_cfg = reset
-        self.clock_sig = self.dut_attr(clock.port)
-        self.reset_sig = self.dut_attr(reset.port)
         self.clock_edge = None
         self.clock_thread = None
-        if self.clock_sig:
+        self.clock_sig = None
+        if self.clock_cfg is not None:
+            self.clock_sig = self.dut_attr(self.clock_cfg.port)
             self.clock_sig.setimmediatevalue(0)
             self.clock_edge = RisingEdge(self.clock_sig)
-            (period, units) = clock.period
-            self.clock_thread = cocotb.fork(
-                Clock(self.clock_sig, period, units=units).start()
+            (period, units) = self.clock_cfg.period
+            self.clock_thread = cocotb.start_soon(
+                Clock(self.clock_sig, period, units=units).start()  # type: ignore
             )
-        else:
-            self.log.critical("No clocks found!")
-        if self.reset_sig:
+        if self.reset_cfg is not None:
+            self.reset_sig = self.dut_attr(self.reset_cfg.port)
             self.reset_value = 1 if self.reset_cfg.active_high else 0
             self.reset_sig.setimmediatevalue(not self.reset_value)
-        else:
-            self.log.warning("No resets found. Specified reset signal: %s", reset.port)
 
     def dut_attr(self, attr):
         return getattr(self.dut, attr)
@@ -386,11 +442,12 @@ class LightTb:
         bv = getattr(self.dut, attr)
         assert isinstance(
             bv, (ConstantObject, ModifiableObject)
-        ), f"attr is of unexpected type {type(bv)}"
+        ), f"attribute of unexpected type {type(bv)}"
         v = bv.value
         return class_(v)
 
     async def _reset_sync(self, cycles=2, delay=None):
+        assert self.clock_cfg is not None
         if delay is None:
             delay = self.clock_cfg.period[0] / 2
         units = self.clock_cfg.period[1]
@@ -402,24 +459,22 @@ class LightTb:
         await Timer(delay, units)
         self.reset_sig.value = not self.reset_value
 
-    async def _reset_async(self, duration=None):
-        ...
-
-    async def reset(self, **kwargs):
+    async def reset(self):
         if not self.reset_sig:
+            self.log.warning("No reset signals were specified!")
             return
-        if self.reset_cfg.synchronous:
-            await self._reset_sync()
-        else:
-            await self._reset_async()
-        self.reset_sig._log.debug("Reset complete")  # pylint: disable=W0212
+        self.log.debug("Starting reset...")
+        await self._reset_sync()
+        self.log.debug("Reset complete")
 
 
 class ValidReadyTb(LightTb):
+    """clock, reset"""
+
     def driver(
         self,
         prefix: str,
-        data_suffix: Union[None, str, List[Union[None, str]]] = "data",
+        data_suffix: Union[str, Sequence[str]] = "data",
         sep: str = "_",
         timeout: Optional[int] = 1000,
         back_pressure=(0, 3),
@@ -441,11 +496,10 @@ class ValidReadyTb(LightTb):
     def monitor(
         self,
         prefix: str,
-        data_suffix: Union[None, str, List[Union[str, None]]] = "data",
+        data_suffix: Union[str, Sequence[str]] = "data",
         sep: str = "_",
         timeout: Optional[int] = 1000,
         back_pressure=(0, 5),
-        **kwargs,
     ) -> ValidReadyMonitor:
         return ValidReadyMonitor(
             self.dut,
@@ -455,33 +509,50 @@ class ValidReadyTb(LightTb):
             sep=sep,
             timeout=timeout,
             back_pressure=back_pressure,
-            **kwargs,
         )
 
 
-class CModel:
-    def __init__(self, sources) -> None:
-        self.sources = sources
-        self.lib = None
-        self.ffi = None
-        self.func_prototypes: List[str] = []
+class Fork(AsyncContextManager):
+    """
+    fork abstraction
+    can be used either as a ContextManager or a callable object
+    """
 
-    def compile(self):
+    def __init__(self, *coroutines: Coroutine):
+        self.tasks: List[RunningTask] = []
+        for coro in coroutines:
+            self @ coro
 
-        ffibuilder = FFI()
-        # name = 'trivium64'
-        cdefs = "\n".join(self.func_prototypes)
-        ffibuilder.cdef(cdefs)
-        ffibuilder.set_source(
-            "_cmodel",
-            cdefs,
-            sources=self.sources,
-            library_dirs=[],
-            #  libraries = []
-        )
+    def __enter__(self):
+        raise SyntaxError("You have to use 'async with Fork()'")
 
-        ffibuilder.compile(verbose=True, tmpdir=".")
-        # from _cmodel import ffi, lib
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        raise SyntaxError("Should use async with")
 
-        # self.ffi = ffi
-        # self.lib = lib
+    async def __aenter__(self):
+        return self
+
+    async def _join(self):
+        rets = []
+        while self.tasks:
+            try:
+                task = self.tasks.pop(0)
+            except IndexError:
+                break
+            rets.append(await task)
+        return None
+
+    # def __await__(self):
+    #     return (yield from self._join().__await__())
+
+    async def __aexit__(
+        self, exc_type: object, exc_val: object, exc_tb: object
+    ) -> Optional[bool]:
+        return await self._join()
+
+    def __matmul__(self, coro: Coroutine) -> Fork:
+        self.tasks.append(cocotb.start_soon(coro))
+        return self
+
+    def __rmatmul__(self, coro: Coroutine) -> Fork:
+        return self @ coro

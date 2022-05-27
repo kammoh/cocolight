@@ -1,0 +1,18 @@
+{
+  "version": "0.1",
+  "mappings": [
+    {
+      "library": "work",
+      "files": [
+        "examples/piso/PISO.vhd",
+        "examples/sipo/SIPO.vhd",
+        "examples/sqrt/sqrt.vhdl",
+        "examples/lfsr/LFSR.vhdl",
+        "examples/Trivium/trivium.vhdl"
+      ]
+    }
+  ],
+  "excludedFiles": [
+    ""
+  ]
+}
