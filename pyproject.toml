@@ -24,8 +24,8 @@ classifiers = [
 dynamic = ["version"]
 
 dependencies = [
-    "cocotb >= 1.6.2",
-    "attrs ~= 21.4",
+    "cocotb >= 1.7",
+    "attrs ~= 22.1",
     "attrs-strict ~= 1.0",
     # the following deps should become optional:
     "cffi >= 1.14",
