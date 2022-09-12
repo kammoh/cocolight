@@ -4,11 +4,11 @@
     {
       "library": "work",
       "files": [
-        "examples/piso/PISO.vhd",
         "examples/sipo/SIPO.vhd",
         "examples/sqrt/sqrt.vhdl",
         "examples/lfsr/LFSR.vhdl",
-        "examples/Trivium/trivium.vhdl"
+        "examples/Trivium/trivium.vhdl",
+        "examples/piso/piso.vhd"
       ]
     }
   ],

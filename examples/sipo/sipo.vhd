@@ -1,5 +1,5 @@
 --===============================================================================================--
---! @file              SIPO.vhd
+--! @file              sipo.vhd
 --! @brief             Serial-In-Pallell-Out width converter
 --! @author            Kamyar Mohajerani
 --! @copyright         Copyright (c) 2022
@@ -64,9 +64,9 @@ entity SIPO is
         pout_ready : in  std_logic
     );
 
-end entity SIPO;
+end entity sipo;
 
-architecture RTL of SIPO is
+architecture RTL of sipo is
     function maybe_clear_invalids(slv, keep : std_logic_vector) return std_logic_vector is
         variable k   : natural;
         variable ret : std_logic_vector(slv'range) := (others => '0');

@@ -1,12 +1,13 @@
 """cocolight utils"""
 from __future__ import annotations
-from functools import reduce
 from itertools import zip_longest
-from typing import Any, Iterable, Iterator, List, Union
+import random
+from math import log2
+from typing import Any, Iterable, List, Union
 from cocotb.binary import BinaryValue
 from cocotb.types import LogicArray, Range, Logic
 
-__all__ = ["grouper"]
+__all__ = ["grouper", "concat_bitvectors", "concat_words", "UInt"]
 
 
 def grouper(iterable: Iterable[Any], n: int, *, fill=None):
@@ -33,6 +34,19 @@ def concat_words(g, bigendian=True):
     if not bigendian:
         g = reversed(g)
     return concat_bitvectors(*g)
+
+
+def random_bits(n: int) -> BinaryValue:
+    return BinaryValue(value=random.getrandbits(n), n_bits=n)
+
+
+def div_ceil(n: int, m: int) -> int:
+    """n/m rounded up to next multiple of m"""
+    return (n + m - 1) // m
+
+
+def is_pow_2(n: int) -> bool:
+    return 2 ** int(log2(n)) == n
 
 
 def bytes_to_words(data: bytes, bit_width: int) -> List[BinaryValue]:

@@ -1,5 +1,5 @@
 --===============================================================================================--
---! @file              PISO.vhd
+--! @file              piso.vhd
 --! @brief             Pallell-In, Serial-Out width converter
 --! @author            Kamyar Mohajerani
 --! @copyright         Copyright (c) 2022
@@ -20,7 +20,7 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
-entity PISO is
+entity piso is
     generic(
         --! Output width in bits
         G_OUT_W      : positive;
@@ -54,9 +54,9 @@ entity PISO is
         s_out_ready : in  std_logic
     );
 
-end entity PISO;
+end entity piso;
 
-architecture RTL of PISO is
+architecture RTL of piso is
 begin
     GEN_TRIVIAL : if G_N = 1 generate
         s_out_data  <= p_in_data;

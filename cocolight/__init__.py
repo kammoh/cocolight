@@ -8,19 +8,16 @@ import random
 from collections.abc import Coroutine
 from typing import (
     Any,
+    AsyncContextManager,
     Awaitable,
     Callable,
     Iterable,
-    Iterator,
-    List,
     Optional,
     Protocol,
     Sequence,
     Type,
     TypeVar,
     Union,
-    ContextManager,
-    AsyncContextManager,
 )
 
 import attrs
@@ -31,14 +28,13 @@ from cocotb.binary import BinaryValue
 from cocotb.clock import Clock
 from cocotb.handle import ConstantObject, HierarchyObject, ModifiableObject
 from cocotb.triggers import RisingEdge, Timer
-from cocotb import RunningTask
 
 try:
     from typing import TypeAlias  # type: ignore
 except ImportError:
     from typing_extensions import TypeAlias  # python < 3.10
 
-from .utils import grouper, UInt
+from .utils import UInt, grouper
 
 __all__ = [
     "DUT",
@@ -65,14 +61,18 @@ class CocoTestCoroutineX(Protocol):
         ...
 
 
-CT: TypeAlias = Union[CocoTestCoroutine, CocoTestCoroutineX]
+CT: TypeAlias = Union[
+    CocoTestCoroutine,
+    CocoTestCoroutineX,
+    Callable[..., Coroutine[Any, Any, Any]],
+]
 
 
 def cocotest(
     f: Optional[CT] = None,
     /,
     *,
-    timeout_time: Optional[Union[numbers.Real, decimal.Decimal]] = None,
+    timeout_time: Union[None, int, float, numbers.Real, decimal.Decimal] = None,
     timeout_unit: str = "step",
     expect_fail: bool = False,
     skip: bool = False,
@@ -198,7 +198,7 @@ class ValidReadyInterface:
                 for s in self.data_sig
             },
             bases=(self.DataType,),
-        )
+        )  # type: ignore
         self.clock = clock
         self.clock_edge = RisingEdge(clock)
         if not valid_signal:
@@ -210,6 +210,8 @@ class ValidReadyInterface:
         self.timeout = timeout
         self.stall_min: int = 0
         self.stall_max: int = 0
+        if back_pressure is None:
+            back_pressure = (0, 0)
         if back_pressure:
             if isinstance(back_pressure, tuple):
                 assert len(back_pressure) == 2
@@ -273,8 +275,8 @@ class ValidReadyDriver(ValidReadyInterface):
         if isinstance(data, self.DataType):
             data = attrs.asdict(data)
         for name, v in data.items():
-            # if not isinstance(v, (int, bool, BinaryValue)):
-            # v = BinaryValue(v)
+            if not isinstance(v, (int, bool, BinaryValue)):
+                v = BinaryValue(v)
             self.data_sig[name].value = v
         await step_until(self.ready, self.clock_edge, timeout=self.timeout)
         self.valid.value = 0
@@ -355,20 +357,40 @@ class ValidReadyMonitor(ValidReadyInterface):
         #         f"expected value must be a dictionary when the output port has multiple data fields ({out.keys()})."
         #     )
         if not isinstance(expected, dict):
+            if isinstance(expected, (BinaryValue, str, int, bool)):
+                if not isinstance(expected, (BinaryValue,)):
+                    v = BinaryValue(expected)
+                else:
+                    v = expected
+                if len(out) == 1:
+                    sig = list(out.values())[0]
+                    try:
+                        failed = sig.value != v.value
+                    except ValueError:
+                        failed = sig.binstr != v.value
+                    if failed:
+                        # noinspection PyProtectedMember
+                        raise ValueError(
+                            f"Received: {bv_repr(sig)}  expected: {bv_repr(v)}"
+                        )
+                    return
             expected = attrs.asdict(expected)
         for name, v in expected.items():
+            sig = out.get(name)
+            if sig is None:
+                raise ValueError(f"signal {name} not found!")
             if not isinstance(v, (BinaryValue,)):
                 v = BinaryValue(v)
             try:
-                failed = out[name].value != v.value
+                failed = sig.value != v.value
             except ValueError:
-                failed = out[name].binstr != v.binstr
+                failed = sig.binstr != v.value
             if failed:
                 # noinspection PyProtectedMember
                 sig_name = self.data_sig[name]._name  # pylint: disable=protected-access
                 raise ValueError(
                     f"Field '{name}' (signal: '{sig_name}') does not match the expected value!\n"
-                    + f"  **  Received: {bv_repr(out[name])}  expected: {bv_repr(v)} **"
+                    + f"  **  Received: {bv_repr(sig)}  expected: {bv_repr(v)} **"
                 )
 
     async def expect_seq(self, seq: Iterable):
@@ -385,7 +407,7 @@ class ValidReadyMonitor(ValidReadyInterface):
                 raise ValueError(
                     f"Failed item #{i + 1}{extra} of the expected sequence.\n  "
                     + e.args[0]
-                ) from None
+                )
 
 
 T = TypeVar("T", int, bool, str, float, BinaryValue)
@@ -446,17 +468,18 @@ class LightTb:
         v = bv.value
         return class_(v)
 
-    async def _reset_sync(self, cycles=2, delay=None):
-        assert self.clock_cfg is not None
+    async def _reset_sync(self, cycles=2, delay: Union[None, float, int] = None):
+        assert self.clock_cfg is not None, "clock must be set"
         if delay is None:
             delay = self.clock_cfg.period[0] / 2
+        assert delay is not None
         units = self.clock_cfg.period[1]
-        await Timer(delay, units)
+        await Timer(delay, units)  # type: ignore
         self.reset_sig.value = self.reset_value
         if self.clock_edge:
             for _ in range(cycles):
                 await self.clock_edge
-        await Timer(delay, units)
+        await Timer(delay, units)  # type: ignore
         self.reset_sig.value = not self.reset_value
 
     async def reset(self):
@@ -477,9 +500,10 @@ class ValidReadyTb(LightTb):
         data_suffix: Union[str, Sequence[str]] = "data",
         sep: str = "_",
         timeout: Optional[int] = 1000,
-        back_pressure=(0, 3),
+        stalls=None,
         **kwargs,
     ) -> ValidReadyDriver:
+        assert self.clock_sig is not None, "clock should be set for a ValidReadyDriver"
         if "debug" not in kwargs:
             kwargs["debug"] = self.debug
         return ValidReadyDriver(
@@ -489,7 +513,7 @@ class ValidReadyTb(LightTb):
             data_suffix=data_suffix,
             sep=sep,
             timeout=timeout,
-            back_pressure=back_pressure,
+            back_pressure=stalls,
             **kwargs,
         )
 
@@ -499,7 +523,7 @@ class ValidReadyTb(LightTb):
         data_suffix: Union[str, Sequence[str]] = "data",
         sep: str = "_",
         timeout: Optional[int] = 1000,
-        back_pressure=(0, 5),
+        back_pressure=None,
     ) -> ValidReadyMonitor:
         return ValidReadyMonitor(
             self.dut,
@@ -519,9 +543,9 @@ class Fork(AsyncContextManager):
     """
 
     def __init__(self, *coroutines: Coroutine):
-        self.tasks: List[RunningTask] = []
+        self.tasks: list[Awaitable] = []
         for coro in coroutines:
-            self @ coro
+            _ = self @ coro
 
     def __enter__(self):
         raise SyntaxError("You have to use 'async with Fork()'")

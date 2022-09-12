@@ -4,9 +4,9 @@ language.vhdl.standard = "2008"
 
 [rtl]
 sources = [ #
-    "LFSR.vhdl",
+    "lfsr.vhdl",
 ]
-top = "LFSR"
+top = "lfsr"
 clock.port = "clk"
 parameters.G_IN_BITS = 8
 parameters.G_OUT_BITS = 96

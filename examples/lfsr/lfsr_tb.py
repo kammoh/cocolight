@@ -1,7 +1,7 @@
-from cocolight import cocotest, DUT, ValidReadyTb
-import cocotb
-from cocotb.triggers import RisingEdge
 import random
+
+import cocotb
+from cocolight import DUT, ValidReadyTb, cocotest
 
 
 class LfsrTb(ValidReadyTb):

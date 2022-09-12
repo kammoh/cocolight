@@ -2,7 +2,7 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
-entity Trivium is
+entity trivium is
     generic(
         G_SETUP_ROUNDS : positive                    := 4; -- 4 is the standard value
         G_IN_BITS      : positive range 1 to 80      := 64; -- <= 80
@@ -24,7 +24,7 @@ entity Trivium is
 
 end entity;
 
-architecture RTL of Trivium is
+architecture RTL of trivium is
     constant TRIVIUM_SIZE : positive := 288; -- DO NOT CHANGE
     constant SETUP_CYCLES : positive := (G_SETUP_ROUNDS * TRIVIUM_SIZE) / G_OUT_BITS;
     subtype T_TRIVIUM_STATE is std_logic_vector(1 to TRIVIUM_SIZE);

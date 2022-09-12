@@ -1,21 +1,8 @@
 import pathlib
-from types import SimpleNamespace
-import cocotb
-from cocotb.clock import Clock
-from cocotb.triggers import RisingEdge, Timer
-from cocotb.regression import TestFactory
-from cocotb.binary import BinaryValue
-import logging
 import random
-from typing import List, Tuple
-from pydantic import BaseModel, root_validator, Field
-import numpy as np
-import os
-import math
 
 from cocolight import DUT, ValidReadyTb, cocotest
 from cocolight.utils import bytes_to_words
-
 
 # We create this TB object in every test so that all the required functions can be accessed
 # from within this class.

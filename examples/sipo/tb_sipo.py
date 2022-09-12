@@ -1,4 +1,4 @@
-"testbench for SIPO.vhdl"
+"""testbench for SIPO"""
 import os
 import random
 from functools import reduce
@@ -7,8 +7,7 @@ from typing import Tuple, Sequence, Optional
 import cocotb
 from cocotb.binary import BinaryValue
 from cocotb.clock import Clock
-from cocotb.triggers import Timer, RisingEdge, FallingEdge
-from cocotb.types import LogicArray, Range
+from cocotb.triggers import RisingEdge, FallingEdge
 
 from cocolight import (
     DUT,

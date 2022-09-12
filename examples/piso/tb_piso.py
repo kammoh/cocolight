@@ -1,14 +1,10 @@
-import enum
+"""testbench for PISO"""
 import os
 import random
 from functools import reduce
-from itertools import zip_longest
-from operator import concat
-
 import cocotb
-from cocolight import DUT, ValidReadyTb, cocotest, grouper
 from cocotb.binary import BinaryValue
-
+from cocolight import DUT, ValidReadyTb, cocotest, grouper
 from cocolight.utils import concat_bitvectors, concat_bv
 
 NUM_TV = int(os.environ.get("NUM_TV", 100))
