@@ -5,12 +5,12 @@ import decimal
 import logging
 import numbers
 import random
-from collections.abc import Coroutine
 from typing import (
     Any,
     AsyncContextManager,
     Awaitable,
     Callable,
+    Coroutine,
     Iterable,
     Optional,
     Protocol,
