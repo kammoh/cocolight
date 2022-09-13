@@ -1,3 +1,17 @@
+-- vsg_off
+--===============================================================================================--
+--! @file              trivium.vhd
+--! @brief             Trivium Cipher
+--! @author            Kamyar Mohajerani
+--! @copyright         Copyright (c) 2022
+--! @license           Solderpad Hardware License v2.1 ([SHL-2.1](https://solderpad.org/licenses/SHL-2.1/))
+--!
+--! @vhdl              VHDL 2008, and later
+--!
+--! @details
+--! @note
+--===============================================================================================--
+
 library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;

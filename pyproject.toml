@@ -24,7 +24,8 @@ classifiers = [
 dynamic = ["version"]
 
 dependencies = [
-    "cocotb >= 1.7",
+    "cocotb >= 1.7 ; python_version<'3.11'",
+    "cocotb @ https://github.com/cocotb/cocotb.git ; python_version>='3.11'",
     "attrs ~= 22.1",
     "attrs-strict ~= 1.0",
     # the following deps should become optional:
