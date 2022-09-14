@@ -391,7 +391,7 @@ class ValidReadyMonitor(ValidReadyInterface):
                 raise ValueError(
                     f"Field '{name}' (signal: '{sig_name}') does not match the expected value!\n"
                     + f"  **  Received: {bv_repr(sig)}  expected: {bv_repr(v)} **"
-                )
+                ) from None
 
     async def expect_seq(self, seq: Iterable):
         for i, expected in enumerate(seq):
@@ -407,7 +407,7 @@ class ValidReadyMonitor(ValidReadyInterface):
                 raise ValueError(
                     f"Failed item #{i + 1}{extra} of the expected sequence.\n  "
                     + e.args[0]
-                )
+                ) from None
 
 
 T = TypeVar("T", int, bool, str, float, BinaryValue)

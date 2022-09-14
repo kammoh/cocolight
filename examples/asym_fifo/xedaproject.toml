@@ -1,0 +1,45 @@
+[[design]]
+name = "asym_fifo_read_wider"
+language.vhdl.standard = "2008"
+
+rtl.sources = ["asym_fifo.vhd"]
+rtl.top = "asym_fifo"
+rtl.clock_port = "clk"
+# rtl.parameters = { G_WR_W = 4, G_RD_W = 16, G_CAPACITY = 16, G_BIGENDIAN = true }
+# rtl.parameters = { G_WR_W = 4, G_RD_W = 16, G_CAPACITY = 16, G_BIGENDIAN = false }
+# rtl.parameters = { G_WR_W = 4, G_RD_W = 16, G_CAPACITY = 128, G_BIGENDIAN = false }
+# rtl.parameters = { G_WR_W = 4, G_RD_W = 16, G_CAPACITY = 32, G_BIGENDIAN = false }
+# rtl.parameters = { G_WR_W = 4, G_RD_W = 4, G_CAPACITY = 32, G_BIGENDIAN = false }
+# rtl.parameters = { G_WR_W = 16, G_RD_W = 4, G_CAPACITY = 32, G_BIGENDIAN = false }
+# rtl.parameters = { G_WR_W = 4, G_RD_W = 1024, G_CAPACITY = 8192, G_BIGENDIAN = false }
+rtl.parameters = { G_WR_W = 4, G_RD_W = 128, G_CAPACITY = 1024, G_BIGENDIAN = false }
+# rtl.parameters = { G_WR_W = 1024, G_RD_W = 4, G_CAPACITY = 8192, G_BIGENDIAN = false }
+
+tb.sources = ["asym_fifo_tb.py"]
+tb.cocotb = true
+
+[[design]]
+name = "asym_fifo_write_wider"
+language.vhdl.standard = "2008"
+
+rtl.sources = ["asym_fifo.vhd"]
+rtl.top = "asym_fifo"
+rtl.clock_port = "clk"
+# rtl.parameters = { G_WR_W = 16, G_RD_W = 4, G_CAPACITY = 32, G_BIGENDIAN = false }
+# rtl.parameters = { G_WR_W = 16, G_RD_W = 4, G_CAPACITY = 32, G_BIGENDIAN = true }
+rtl.parameters = { G_WR_W = 128, G_RD_W = 16, G_CAPACITY = 1024, G_BIGENDIAN = true }
+
+tb.sources = ["asym_fifo_tb.py"]
+tb.cocotb = true
+
+[flows.yosys]
+fpga.vendor = "xilinx"
+fpga.family = "artix-7"
+clocks.main_clock.freq = 100
+abc9 = false
+
+[flows.vivado_synth]
+fpga.part = "xc7a100tftg256-3"
+xdc_files = ["cw305.xdc"]
+clocks.main_clock.freq = 100
+bitstream = "/nhome/mmohajer/notebooks/dut.bit"

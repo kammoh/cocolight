@@ -10,7 +10,8 @@
         "examples/Trivium/trivium.vhdl",
         "examples/piso/piso.vhd",
         "examples/Trivium",
-        "examples/asym_fifo"
+        "examples/asym_fifo",
+        "examples/asym_fifo/asym_fifo.vhd"
       ]
     }
   ],
