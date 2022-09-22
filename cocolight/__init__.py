@@ -11,6 +11,7 @@ from typing import (
     Awaitable,
     Callable,
     Coroutine,
+    Dict,
     Iterable,
     Optional,
     Protocol,
@@ -182,7 +183,7 @@ class ValidReadyInterface:
             sig_name = prefix if not suffix else prefix + sep + suffix
             return getattr(dut, sig_name)
 
-        self.data_sig: dict[str, ModifiableObject]
+        self.data_sig: Dict[str, ModifiableObject]
         assert data_suffix
         if isinstance(data_suffix, str):
             self.data_sig = {data_suffix: _get_sig(data_suffix)}
@@ -230,7 +231,7 @@ class ValidReadyInterface:
                 await self.clock_edge
 
 
-PokeDict = dict[str, Union[str, int, BinaryValue]]
+PokeDict = Dict[str, Union[str, int, BinaryValue]]
 
 
 class ValidReadyDriver(ValidReadyInterface):
@@ -329,7 +330,7 @@ class ValidReadyMonitor(ValidReadyInterface):
         await step_until(self.valid, clock_edge, timeout=self.timeout)
         data_dict = {}
         for name, sig in self.data_sig.items():
-            data_dict[str(name)] = sig.value
+            data_Dict[str(name)] = sig.value
         self.ready.value = 0
         return self.DataType(**data_dict)
 
@@ -340,14 +341,14 @@ class ValidReadyMonitor(ValidReadyInterface):
             num_words (int): number of data elements to receive
 
         Returns:
-            list[Union[BinaryValue, dict[str, BinaryValue]]]: list of data words received
+            list[Union[BinaryValue, Dict[str, BinaryValue]]]: list of data words received
         """
         return [await self.dequeue() for _ in range(num_words)]
 
     async def expect(
         self,
         expected: Union[
-            dict[str, Union[BinaryValue, str, int, bool]], ValidReadyMonitor.DataType
+            Dict[str, Union[BinaryValue, str, int, bool]], ValidReadyMonitor.DataType
         ],
     ):
         out = attrs.asdict(await self.dequeue())
