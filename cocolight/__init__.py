@@ -330,7 +330,7 @@ class ValidReadyMonitor(ValidReadyInterface):
         await step_until(self.valid, clock_edge, timeout=self.timeout)
         data_dict = {}
         for name, sig in self.data_sig.items():
-            data_Dict[str(name)] = sig.value
+            data_dict[str(name)] = sig.value
         self.ready.value = 0
         return self.DataType(**data_dict)
 
