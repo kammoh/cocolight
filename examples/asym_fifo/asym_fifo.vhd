@@ -6,7 +6,7 @@
 --! @license           Solderpad Hardware License v2.1
 --!                    [SHL-2.1](https://solderpad.org/licenses/SHL-2.1/))
 --!
---! @vhdl              VHDL 2008, and later
+--! @vhdl              VHDL 1993, 2002, 2008, 2017
 --!
 --! @details           - Can be used as regular FIFO, Asymmetric FIFO (enqueue/write width different
 --!                     from dequeue/read width), SIPO, or PISO.
@@ -80,36 +80,42 @@ architecture RTL of asym_fifo is
     end if;
   end function;
 
+  function MIN_W return natural is
+  begin
+    if G_WR_W <= G_RD_W then
+      return G_WR_W;
+    end if;
+    return G_RD_W;
+  end function;
+
   constant WR_RD_LOG2 : natural := log2ceil(G_WR_W / G_RD_W);
   constant RD_WR_LOG2 : natural := log2ceil(G_RD_W / G_WR_W);
-  constant MEM_DEPTH  : natural := G_CAPACITY / minimum(G_WR_W, G_RD_W);
+  constant MEM_DEPTH  : natural := G_CAPACITY / MIN_W;
 
-  type T_RAM is array (0 to MEM_DEPTH - 1) of std_logic_vector(minimum(G_WR_W, G_RD_W) - 1 downto 0);
+  type T_RAM is array (0 to MEM_DEPTH - 1) of std_logic_vector(MIN_W - 1 downto 0);
 
-  --======================================== Memory ==========================================--
+  --========================================= Memory ===========================================--
   signal ram : T_RAM;
 
   -- Xilinx/Vivado:
   attribute ram_style : string;
   attribute ram_style of ram : signal is G_RAM_STYLE;
 
-  --======================================= Registers =========================================--
-  signal is_empty          : boolean;   -- := TRUE;
-  signal is_full           : boolean;   -- := FALSE;
-  signal dequeued_is_valid : boolean;   -- := FALSE;
+  --======================================== Registers =========================================--
+  signal is_empty          : boolean;
+  signal is_full           : boolean;
+  signal dequeued_is_valid : std_logic;
   signal rd_ptr            : unsigned(log2ceil(G_CAPACITY / G_RD_W) - 1 downto 0);
   signal wr_ptr            : unsigned(log2ceil(G_CAPACITY / G_WR_W) - 1 downto 0);
 
-  signal out_reg                  : std_logic_vector(G_RD_W - 1 downto 0);
-  signal out_reg_valid, out_ready : std_logic; -- := FALSE; -- register only if G_OUT_REG o/w Wire
-
-  --========================================= Wires ===========================================--
+  --========================================== Wires ============================================--
   signal next_rd_ptr                : unsigned(rd_ptr'range);
   signal next_wr_ptr                : unsigned(wr_ptr'range);
   signal write_en, read_en, overlap : boolean;
   signal almost_empty, almost_full  : boolean;
   signal can_deq                    : boolean;
   signal read_data                  : std_logic_vector(G_RD_W - 1 downto 0);
+  signal out_ready, enq_ready_o     : std_logic; -- := FALSE;
 
 begin
   assert FALSE
@@ -127,16 +133,18 @@ begin
   next_rd_ptr <= rd_ptr + 1;            -- mod (2 ** DEPTH_BITS)
   next_wr_ptr <= wr_ptr + 1;            -- mod (2 ** DEPTH_BITS)
 
-  GEN_OVERLAP : if rd_ptr'length = 0 or wr_ptr'length = 0 generate
-    overlap <= TRUE;
-  else generate
+  -- GEN_OVERLAP_ZEROLEN_PTR : if rd_ptr'length = 0 or wr_ptr'length = 0 generate
+  -- overlap <= TRUE;
+  -- end generate;
+  GEN_OVERLAP : if rd_ptr'length /= 0 and wr_ptr'length /= 0 generate
     overlap <= rd_ptr(rd_ptr'length - 1 downto WR_RD_LOG2) = wr_ptr(wr_ptr'length - 1 downto RD_WR_LOG2);
   end generate;
 
   assert (wr_ptr'length - RD_WR_LOG2) = (rd_ptr'length - WR_RD_LOG2) severity FAILURE;
 
-  write_en <= enq_valid = '1' and enq_ready = '1';
-  read_en  <= can_deq and (not dequeued_is_valid or out_ready = '1');
+  write_en  <= enq_valid = '1' and enq_ready_o = '1';
+  read_en   <= can_deq and (dequeued_is_valid = '0' or out_ready = '1');
+  enq_ready <= enq_ready_o;
 
   process(clk) is
   begin
@@ -144,7 +152,7 @@ begin
       if rst = '1' then
         is_empty          <= TRUE;
         is_full           <= FALSE;
-        dequeued_is_valid <= FALSE;
+        dequeued_is_valid <= '0';
         rd_ptr            <= (others => '0');
         wr_ptr            <= (others => '0');
       else
@@ -156,14 +164,14 @@ begin
           wr_ptr   <= next_wr_ptr;
         end if;
         if read_en then
-          dequeued_is_valid <= TRUE;
+          dequeued_is_valid <= '1';
           if not write_en and almost_empty then
             is_empty <= TRUE;
           end if;
           is_full           <= FALSE;
           rd_ptr            <= next_rd_ptr;
         elsif out_ready = '1' then
-          dequeued_is_valid <= FALSE;
+          dequeued_is_valid <= '0';
         end if;
       end if;
     end if;
@@ -177,8 +185,8 @@ begin
     almost_empty <= next_rd_ptr & (RD_WR_LOG2 - 1 downto 0 => '0') = wr_ptr;
     almost_full  <= next_wr_ptr = rd_ptr & (RD_WR_LOG2 - 1 downto 0 => '0');
 
-    can_deq   <= is_full or not overlap;
-    enq_ready <= '0' when is_full else '1';
+    can_deq     <= is_full or not overlap;
+    enq_ready_o <= '0' when is_full else '1';
 
     GEN_READ_BIG_ENDIAN : if G_BIG_ENDIAN generate
       GEN_READ_SWAP : for i in 0 to NUM_READ_CHUNKS - 1 generate
@@ -214,8 +222,8 @@ begin
     almost_empty <= next_rd_ptr = wr_ptr & (WR_RD_LOG2 - 1 downto 0 => '0');
     almost_full  <= next_wr_ptr & (WR_RD_LOG2 - 1 downto 0 => '0') = rd_ptr;
 
-    can_deq   <= not is_empty;
-    enq_ready <= '1' when (is_empty or not overlap) else '0';
+    can_deq     <= not is_empty;
+    enq_ready_o <= '1' when (is_empty or not overlap) else '0';
 
     process(clk) is
     begin
@@ -235,6 +243,9 @@ begin
   end generate;
 
   GEN_OUTREG : if G_OUT_REG generate
+    --======================================== Registers ==========================================--
+    signal out_reg       : std_logic_vector(G_RD_W - 1 downto 0);
+    signal out_reg_valid : std_logic;   -- := FALSE;
 
   begin
     deq_data  <= out_reg;
@@ -248,7 +259,7 @@ begin
           out_reg_valid <= '0';
         elsif deq_ready = '1' or out_reg_valid = '0' then
           out_reg       <= read_data;
-          out_reg_valid <= '1' when dequeued_is_valid else '0';
+          out_reg_valid <= dequeued_is_valid;
         end if;
       end if;
     end process;
@@ -256,7 +267,7 @@ begin
 
   GEN_NO_OUTREG : if not G_OUT_REG generate
     deq_data  <= read_data;
-    deq_valid <= '1' when dequeued_is_valid else '0';
+    deq_valid <= dequeued_is_valid;
     out_ready <= deq_ready;
   end generate;
 

@@ -1,6 +1,6 @@
 [[design]]
 name = "asym_fifo_read_wider"
-language.vhdl.standard = "2008"
+language.vhdl.standard = "1993"
 
 rtl.sources = ["asym_fifo.vhd"]
 rtl.top = "asym_fifo"
@@ -20,7 +20,7 @@ tb.cocotb = true
 
 [[design]]
 name = "asym_fifo_write_wider"
-language.vhdl.standard = "2008"
+language.vhdl.standard = "1993"
 
 rtl.sources = ["asym_fifo.vhd"]
 rtl.top = "asym_fifo"
