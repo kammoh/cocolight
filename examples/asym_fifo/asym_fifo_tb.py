@@ -29,7 +29,7 @@ async def test_enq_deq(dut: DUT, num_tests: int = NUM_TV, debug=False):
     G_WR_W = tb.get_value("G_WR_W", int)
     G_RD_W = tb.get_value("G_RD_W", int)
     G_CAPACITY = tb.get_value("G_CAPACITY", int)
-    G_BIGENDIAN = tb.get_value("G_BIGENDIAN", bool)
+    G_BIG_ENDIAN = tb.get_value("G_BIG_ENDIAN", bool)
 
     tb.log.info(
         "[%s]\n G_WR_W:%d\n G_RD_W:%d\n G_CAPACITY:%d\n G_BIG_ENDIAN=%s\n num_tests:%d\n",
@@ -37,7 +37,7 @@ async def test_enq_deq(dut: DUT, num_tests: int = NUM_TV, debug=False):
         G_WR_W,
         G_RD_W,
         G_CAPACITY,
-        G_BIGENDIAN,
+        G_BIG_ENDIAN,
         num_tests,
     )
 
@@ -52,14 +52,14 @@ async def test_enq_deq(dut: DUT, num_tests: int = NUM_TV, debug=False):
             n = randint(1, 50) * RD_WR_RATIO
             inputs = [random_bits(G_WR_W) for _ in range(n)]
             expected_outputs = [
-                concat_words(g, bigendian=G_BIGENDIAN)
+                concat_words(g, bigendian=G_BIG_ENDIAN)
                 for g in grouper(inputs, RD_WR_RATIO)
             ]
         else:
             n = randint(1, 50) * WR_RD_RATIO
             expected_outputs = [random_bits(G_RD_W) for _ in range(n)]
             inputs = [
-                concat_words(g, bigendian=G_BIGENDIAN)
+                concat_words(g, bigendian=G_BIG_ENDIAN)
                 for g in grouper(expected_outputs, WR_RD_RATIO)
             ]
 
@@ -79,15 +79,17 @@ async def test_fill(dut: DUT, num_tests: int = NUM_TV, debug=False):
     G_WR_W = tb.get_value("G_WR_W", int)
     G_RD_W = tb.get_value("G_RD_W", int)
     G_CAPACITY = tb.get_value("G_CAPACITY", int)
-    G_BIGENDIAN = tb.get_value("G_BIGENDIAN", bool)
+    G_BIG_ENDIAN = tb.get_value("G_BIG_ENDIAN", bool)
+    G_OUT_REG = tb.get_value("G_OUT_REG", int)
 
     tb.log.info(
-        "[%s]\n G_WR_W:%d\n G_RD_W:%d\n G_CAPACITY:%d\n G_BIG_ENDIAN=%s\n num_tests:%d\n",
+        "[%s]\n G_WR_W:%d\n G_RD_W:%d\n G_CAPACITY:%d\n G_BIG_ENDIAN=%s\n G_OUT_REG=%s\n num_tests:%d\n",
         str(dut),
         G_WR_W,
         G_RD_W,
         G_CAPACITY,
-        G_BIGENDIAN,
+        G_BIG_ENDIAN,
+        G_OUT_REG,
         num_tests,
     )
 
@@ -112,7 +114,7 @@ async def test_fill(dut: DUT, num_tests: int = NUM_TV, debug=False):
             cap_words = (G_CAPACITY + G_RD_W) // G_WR_W
             inputs = [random_bits(G_WR_W) for _ in range(cap_words)]
             expected_outputs = [
-                concat_words(g, bigendian=G_BIGENDIAN)
+                concat_words(g, bigendian=G_BIG_ENDIAN)
                 for g in grouper(inputs, RD_WR_RATIO)
             ]
         else:
@@ -120,7 +122,7 @@ async def test_fill(dut: DUT, num_tests: int = NUM_TV, debug=False):
             cap_words = G_CAPACITY // G_RD_W
             expected_outputs = [random_bits(G_RD_W) for _ in range(cap_words)]
             inputs = [
-                concat_words(g, bigendian=G_BIGENDIAN)
+                concat_words(g, bigendian=G_BIG_ENDIAN)
                 for g in grouper(expected_outputs, WR_RD_RATIO)
             ]
 

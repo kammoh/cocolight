@@ -5,15 +5,15 @@ language.vhdl.standard = "2008"
 rtl.sources = ["asym_fifo.vhd"]
 rtl.top = "asym_fifo"
 rtl.clock_port = "clk"
-# rtl.parameters = { G_WR_W = 4, G_RD_W = 16, G_CAPACITY = 16, G_BIGENDIAN = true }
-# rtl.parameters = { G_WR_W = 4, G_RD_W = 16, G_CAPACITY = 16, G_BIGENDIAN = false }
-# rtl.parameters = { G_WR_W = 4, G_RD_W = 16, G_CAPACITY = 128, G_BIGENDIAN = false }
-# rtl.parameters = { G_WR_W = 4, G_RD_W = 16, G_CAPACITY = 32, G_BIGENDIAN = false }
-# rtl.parameters = { G_WR_W = 4, G_RD_W = 4, G_CAPACITY = 32, G_BIGENDIAN = false }
-# rtl.parameters = { G_WR_W = 16, G_RD_W = 4, G_CAPACITY = 32, G_BIGENDIAN = false }
-# rtl.parameters = { G_WR_W = 4, G_RD_W = 1024, G_CAPACITY = 8192, G_BIGENDIAN = false }
-rtl.parameters = { G_WR_W = 4, G_RD_W = 128, G_CAPACITY = 1024, G_BIGENDIAN = false }
-# rtl.parameters = { G_WR_W = 1024, G_RD_W = 4, G_CAPACITY = 8192, G_BIGENDIAN = false }
+# rtl.parameters = { G_WR_W = 4, G_RD_W = 16, G_CAPACITY = 16, G_BIG_ENDIAN = true }
+# rtl.parameters = { G_WR_W = 4, G_RD_W = 16, G_CAPACITY = 16, G_BIG_ENDIAN = false }
+# rtl.parameters = { G_WR_W = 4, G_RD_W = 16, G_CAPACITY = 128, G_BIG_ENDIAN = false }
+# rtl.parameters = { G_WR_W = 4, G_RD_W = 16, G_CAPACITY = 32, G_BIG_ENDIAN = false }
+# rtl.parameters = { G_WR_W = 4, G_RD_W = 4, G_CAPACITY = 32, G_BIG_ENDIAN = false }
+# rtl.parameters = { G_WR_W = 16, G_RD_W = 4, G_CAPACITY = 32, G_BIG_ENDIAN = false }
+# rtl.parameters = { G_WR_W = 4, G_RD_W = 1024, G_CAPACITY = 8192, G_BIG_ENDIAN = false }
+rtl.parameters = { G_WR_W = 4, G_RD_W = 128, G_CAPACITY = 1024, G_BIG_ENDIAN = false }
+# rtl.parameters = { G_WR_W = 1024, G_RD_W = 4, G_CAPACITY = 8192, G_BIG_ENDIAN = false }
 
 tb.sources = ["asym_fifo_tb.py"]
 tb.cocotb = true
@@ -25,9 +25,9 @@ language.vhdl.standard = "2008"
 rtl.sources = ["asym_fifo.vhd"]
 rtl.top = "asym_fifo"
 rtl.clock_port = "clk"
-# rtl.parameters = { G_WR_W = 16, G_RD_W = 4, G_CAPACITY = 32, G_BIGENDIAN = false }
-# rtl.parameters = { G_WR_W = 16, G_RD_W = 4, G_CAPACITY = 32, G_BIGENDIAN = true }
-rtl.parameters = { G_WR_W = 128, G_RD_W = 16, G_CAPACITY = 1024, G_BIGENDIAN = true }
+# rtl.parameters = { G_WR_W = 16, G_RD_W = 4, G_CAPACITY = 32, G_BIG_ENDIAN = false }
+# rtl.parameters = { G_WR_W = 16, G_RD_W = 4, G_CAPACITY = 32, G_BIG_ENDIAN = true }
+rtl.parameters = { G_WR_W = 128, G_RD_W = 16, G_CAPACITY = 1024, G_BIG_ENDIAN = true }
 
 tb.sources = ["asym_fifo_tb.py"]
 tb.cocotb = true

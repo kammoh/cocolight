@@ -23,12 +23,12 @@ use ieee.numeric_std.all;
 
 entity asym_fifo is
   generic(
-    G_WR_W      : positive := 4;        -- write (enqueue) width in bits, must be powers of 2
-    G_RD_W      : positive := 16;       -- read (dequeue) width in bits, must be powers of 2
-    G_CAPACITY  : positive := 4096;     -- memory capacity in bits, must be powers of 2
-    G_BIGENDIAN : boolean  := TRUE;
-    G_OUT_REG   : boolean  := FALSE;
-    G_RAM_STYLE : string   := "block"   -- also try: "mixed", "ultra"
+    G_WR_W       : positive := 4;       -- write (enqueue) width in bits, must be powers of 2
+    G_RD_W       : positive := 16;      -- read (dequeue) width in bits, must be powers of 2
+    G_CAPACITY   : positive := 4096;    -- memory capacity in bits, must be powers of 2
+    G_BIG_ENDIAN : boolean  := TRUE;
+    G_OUT_REG    : boolean  := FALSE;
+    G_RAM_STYLE  : string   := "block"  -- "block" (BRAM), "ultra" (UlstraScale+), "distributed" (LUT), "registers" (FFs), "mixed" (combination of RAM types designed to minimize the amount of space)
   );
 
   port(
@@ -73,7 +73,7 @@ architecture RTL of asym_fifo is
   function slv_chunk(slv : std_logic_vector; chunk_width, i : natural) return std_logic_vector is
     constant NUM_CHUNKS : natural := slv'length / chunk_width;
   begin
-    if G_BIGENDIAN then
+    if G_BIG_ENDIAN then
       return slv((NUM_CHUNKS - i) * chunk_width - 1 downto (NUM_CHUNKS - i - 1) * chunk_width);
     else
       return slv((i + 1) * chunk_width - 1 downto i * chunk_width);
@@ -94,21 +94,22 @@ architecture RTL of asym_fifo is
   attribute ram_style of ram : signal is G_RAM_STYLE;
 
   --======================================= Registers =========================================--
-  signal is_empty            : boolean; -- := TRUE;
-  signal is_full             : boolean; -- := FALSE;
-  signal dequeued_is_valid   : boolean; -- := FALSE;
-  signal dequeued_is_valid_r : boolean; -- := FALSE; -- register only if G_OUT_REG o/w Wire
-  signal rd_ptr              : unsigned(log2ceil(G_CAPACITY / G_RD_W) - 1 downto 0);
-  signal wr_ptr              : unsigned(log2ceil(G_CAPACITY / G_WR_W) - 1 downto 0);
-  signal out_reg             : std_logic_vector(G_RD_W - 1 downto 0);
+  signal is_empty          : boolean;   -- := TRUE;
+  signal is_full           : boolean;   -- := FALSE;
+  signal dequeued_is_valid : boolean;   -- := FALSE;
+  signal rd_ptr            : unsigned(log2ceil(G_CAPACITY / G_RD_W) - 1 downto 0);
+  signal wr_ptr            : unsigned(log2ceil(G_CAPACITY / G_WR_W) - 1 downto 0);
+
+  signal out_reg                  : std_logic_vector(G_RD_W - 1 downto 0);
+  signal out_reg_valid, out_ready : std_logic; -- := FALSE; -- register only if G_OUT_REG o/w Wire
 
   --========================================= Wires ===========================================--
-  signal next_rd_ptr               : unsigned(rd_ptr'range);
-  signal next_wr_ptr               : unsigned(wr_ptr'range);
-  signal do_enq, do_deq, overlap   : boolean;
-  signal almost_empty, almost_full : boolean;
-  signal can_deq                   : boolean;
-  signal read_data                 : std_logic_vector(G_RD_W - 1 downto 0);
+  signal next_rd_ptr                : unsigned(rd_ptr'range);
+  signal next_wr_ptr                : unsigned(wr_ptr'range);
+  signal write_en, read_en, overlap : boolean;
+  signal almost_empty, almost_full  : boolean;
+  signal can_deq                    : boolean;
+  signal read_data                  : std_logic_vector(G_RD_W - 1 downto 0);
 
 begin
   assert FALSE
@@ -134,9 +135,8 @@ begin
 
   assert (wr_ptr'length - RD_WR_LOG2) = (rd_ptr'length - WR_RD_LOG2) severity FAILURE;
 
-  do_enq    <= enq_valid = '1' and enq_ready = '1';
-  deq_valid <= '1' when dequeued_is_valid_r else '0';
-  do_deq    <= can_deq and (not dequeued_is_valid or deq_ready = '1');
+  write_en <= enq_valid = '1' and enq_ready = '1';
+  read_en  <= can_deq and (not dequeued_is_valid or out_ready = '1');
 
   process(clk) is
   begin
@@ -148,24 +148,22 @@ begin
         rd_ptr            <= (others => '0');
         wr_ptr            <= (others => '0');
       else
-        if do_enq then
-          if not do_deq and almost_full then
+        if write_en then
+          if not read_en and almost_full then
             is_full <= TRUE;
           end if;
           is_empty <= FALSE;
           wr_ptr   <= next_wr_ptr;
         end if;
-        if do_deq then
+        if read_en then
           dequeued_is_valid <= TRUE;
-          if not do_enq and almost_empty then
+          if not write_en and almost_empty then
             is_empty <= TRUE;
           end if;
           is_full           <= FALSE;
           rd_ptr            <= next_rd_ptr;
-        else
-          if deq_valid = '1' and deq_ready = '1' then
-            dequeued_is_valid <= FALSE;
-          end if;
+        elsif out_ready = '1' then
+          dequeued_is_valid <= FALSE;
         end if;
       end if;
     end if;
@@ -182,13 +180,13 @@ begin
     can_deq   <= is_full or not overlap;
     enq_ready <= '0' when is_full else '1';
 
-    GEN_READ_BIG_ENDIAN : if G_BIGENDIAN generate
+    GEN_READ_BIG_ENDIAN : if G_BIG_ENDIAN generate
       GEN_READ_SWAP : for i in 0 to NUM_READ_CHUNKS - 1 generate
         read_data((NUM_READ_CHUNKS - i) * G_WR_W - 1 downto (NUM_READ_CHUNKS - i - 1) * G_WR_W) <= read_tmp((i + 1) * G_WR_W - 1 downto i * G_WR_W);
       end generate;
     end generate;
 
-    GEN_READ_LITTLE_ENDIAN : if not G_BIGENDIAN generate
+    GEN_READ_LITTLE_ENDIAN : if not G_BIG_ENDIAN generate
       read_data <= read_tmp;
     end generate;
 
@@ -196,17 +194,16 @@ begin
     begin
       if rising_edge(clk) then
         -- Write
-        if do_enq then
+        if write_en then
           ram(to_int01(wr_ptr)) <= enq_data;
         end if;
         -- Read
-        if do_deq then
+        if read_en then
           -- read_words(i) <= ram(to_int01(rd_ptr & to_unsigned(i, RD_WR_LOG2)));
           for i in 0 to NUM_READ_CHUNKS - 1 loop
             read_tmp((i + 1) * G_WR_W - 1 downto i * G_WR_W) <= ram(to_int01(rd_ptr & to_unsigned(i, RD_WR_LOG2)));
           end loop;
         end if;
-        out_reg <= read_data;
       end if;
     end process;
   end generate;
@@ -224,33 +221,43 @@ begin
     begin
       if rising_edge(clk) then
         -- Write
-        if do_enq then
+        if write_en then
           for i in 0 to (G_WR_W / G_RD_W) - 1 loop
             ram(to_int01(wr_ptr & to_unsigned(i, WR_RD_LOG2))) <= slv_chunk(enq_data, G_RD_W, i);
           end loop;
         end if;
         -- Read
-        if do_deq then
+        if read_en then
           read_data <= ram(to_int01(rd_ptr));
         end if;
-        out_reg <= read_data;
       end if;
     end process;
   end generate;
 
   GEN_OUTREG : if G_OUT_REG generate
-    deq_data <= out_reg;
+
+  begin
+    deq_data  <= out_reg;
+    deq_valid <= out_reg_valid;
+    out_ready <= not out_reg_valid or deq_ready;
+
     process(clk) is
     begin
       if rising_edge(clk) then
-        dequeued_is_valid_r <= dequeued_is_valid;
+        if rst = '1' then
+          out_reg_valid <= '0';
+        elsif deq_ready = '1' or out_reg_valid = '0' then
+          out_reg       <= read_data;
+          out_reg_valid <= '1' when dequeued_is_valid else '0';
+        end if;
       end if;
     end process;
   end generate;
 
   GEN_NO_OUTREG : if not G_OUT_REG generate
-    deq_data            <= read_data;
-    dequeued_is_valid_r <= dequeued_is_valid;
+    deq_data  <= read_data;
+    deq_valid <= '1' when dequeued_is_valid else '0';
+    out_ready <= deq_ready;
   end generate;
 
 end architecture;
