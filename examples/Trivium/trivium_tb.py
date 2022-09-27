@@ -29,7 +29,7 @@ class CModel:
         ffibuilder.cdef(cdefs)
 
         ffibuilder.set_source(
-            f"_cmodel",
+            "_" + self.__class__.__name__.lower(),
             cdefs,
             sources=sources,
             library_dirs=[],
