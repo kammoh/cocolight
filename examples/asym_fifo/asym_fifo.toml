@@ -6,15 +6,15 @@ language.vhdl.standard = "2008"
 sources = ['asym_fifo.vhd']
 top = 'asym_fifo'
 clock_port = 'clk'
-# parameters = { G_WR_W = 4, G_RD_W = 16, G_CAPACITY = 16, G_BIGENDIAN = true }
-# parameters = { G_WR_W = 4, G_RD_W = 16, G_CAPACITY = 16, G_BIGENDIAN = false }
-# parameters = { G_WR_W = 4, G_RD_W = 16, G_CAPACITY = 128, G_BIGENDIAN = false }
-# parameters = { G_WR_W = 4, G_RD_W = 16, G_CAPACITY = 32, G_BIGENDIAN = false }
-# parameters = { G_WR_W = 4, G_RD_W = 4, G_CAPACITY = 32, G_BIGENDIAN = false }
-# parameters = { G_WR_W = 16, G_RD_W = 4, G_CAPACITY = 32, G_BIGENDIAN = false }
-# parameters = { G_WR_W = 4, G_RD_W = 1024, G_CAPACITY = 8192, G_BIGENDIAN = false }
-parameters = { G_WR_W = 4, G_RD_W = 128, G_CAPACITY = 1024, G_BIGENDIAN = false }
-# parameters = { G_WR_W = 1024, G_RD_W = 4, G_CAPACITY = 8192, G_BIGENDIAN = false }
+# parameters = { G_WR_W = 4, G_RD_W = 16, G_CAPACITY = 16, G_BIG_ENDIAN = true }
+# parameters = { G_WR_W = 4, G_RD_W = 16, G_CAPACITY = 16, G_BIG_ENDIAN = false }
+# parameters = { G_WR_W = 4, G_RD_W = 16, G_CAPACITY = 128, G_BIG_ENDIAN = false }
+# parameters = { G_WR_W = 4, G_RD_W = 16, G_CAPACITY = 32, G_BIG_ENDIAN = false }
+# parameters = { G_WR_W = 4, G_RD_W = 4, G_CAPACITY = 32, G_BIG_ENDIAN = false }
+# parameters = { G_WR_W = 16, G_RD_W = 4, G_CAPACITY = 32, G_BIG_ENDIAN = false }
+# parameters = { G_WR_W = 4, G_RD_W = 1024, G_CAPACITY = 8192, G_BIG_ENDIAN = false }
+# parameters = { G_WR_W = 4, G_RD_W = 128, G_CAPACITY = 1024, G_BIG_ENDIAN = true }
+parameters = { G_WR_W = 64, G_RD_W = 8, G_CAPACITY = 1024, G_BIG_ENDIAN = true }
 
 [tb]
 sources = ['asym_fifo_tb.py']

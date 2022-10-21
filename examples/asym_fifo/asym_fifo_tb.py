@@ -15,7 +15,7 @@ from cocolight import (
 )
 from cocolight.utils import concat_words, grouper, random_bits, is_pow_2
 
-NUM_TV = int(os.environ.get("NUM_TV", 200))
+NUM_TV = int(os.environ.get("NUM_TV", 100))
 
 
 @cocotest(skip=False)
