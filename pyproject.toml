@@ -25,8 +25,8 @@ dynamic = ["version"]
 
 dependencies = [
     "cocotb >= 1.7.1",
-    "attrs ~= 22.1",
-    "attrs-strict ~= 1.0",
+    "attrs >= 23.1",
+    "attrs-strict >= 1.0",
     # the following deps should become optional:
     "cffi >= 1.14",
 ]
