@@ -81,6 +81,7 @@ def cocotest(
 ) -> Callable[
     [CT], Union[Coroutine[Any, Any, None], Awaitable[None]]
 ]:  # Union[Callable[[CT], Coroutine[Any, Any, None]], Coroutine[Any, Any, None], Any]:
+    """decorator for cocotb tests. Alternative to cocotb.test which can be used without parenthesis"""
     def wrap(coro: CT) -> Awaitable[None]:
         return cocotb.test(  # pylint: disable=E1120
             timeout_time=timeout_time,
